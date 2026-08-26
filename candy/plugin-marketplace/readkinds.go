@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/candywalk"
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -22,12 +23,18 @@ type kindSet struct {
 }
 
 // readKinds walks the repo and decodes every harness-kind entity.
+//
+// REMOTE-REF-AWARE (the candy de-submodule cutover Phase 3): the walk is CollectEntitiesRemote,
+// so every @github.com/opencharly/... ref in the walked files' require:/candy: lists is resolved
+// through spec/refs.DownloadRepo and the fetched repos' skill:/hook:/marketplace: entities are
+// unioned in, transitively. After Phase 4 deletes the in-repo candy/ dirs this is what keeps
+// every moved candy's skill/hook entity emitting.
 func readKinds(root string) (*kindSet, error) {
 	roots, err := candywalk.RepoRoots(root)
 	if err != nil {
 		return nil, fmt.Errorf("discover repo roots: %w", err)
 	}
-	ents, err := candywalk.CollectEntities(roots)
+	ents, err := candywalk.CollectEntitiesRemote(roots, refs.DownloadRepo)
 	if err != nil {
 		return nil, fmt.Errorf("collect entities: %w", err)
 	}
