@@ -14,15 +14,18 @@ import (
 // TOP-LEVEL marketplace fields per the plugin-marketplace spec; `metadata` is defined as
 // carrying `pluginRoot`, so description/version nested there were never read as the
 // marketplace's own description/version. `renames` maps a former plugin name to its current
-// one (or null if removed) and is omitted while empty.
+// one and is omitted while empty. The spec also allows a null value to mark a plugin as
+// REMOVED; map[string]string cannot express that, which is deliberate for now -- nothing in
+// this emitter populates Renames, so the removal case has no producer. Switch to
+// map[string]*string at the same time as the first caller that needs it, not before.
 type marketplaceManifest struct {
 	Name  string `json:"name"`
 	Owner struct {
 		Name string `json:"name"`
 	} `json:"owner"`
-	Description string            `json:"description,omitempty"`
-	Version     string            `json:"version,omitempty"`
-	Renames     map[string]string `json:"renames,omitempty"`
+	Description string                   `json:"description,omitempty"`
+	Version     string                   `json:"version,omitempty"`
+	Renames     map[string]string        `json:"renames,omitempty"`
 	Plugins     []marketplacePluginEntry `json:"plugins"`
 }
 
