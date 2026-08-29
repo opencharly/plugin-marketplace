@@ -89,17 +89,6 @@ func scanGenerated(root, outDir string, families []family, ks *kindSet) ([]strin
 	addCorpus("plugins/kimi.plugin.json")
 	addCorpus("plugins/package.json")
 	addCorpus("plugins/profiles.json")
-	addCorpus("plugins/setup")
-	// 3. .claude/hooks under root — entirely generated (every gate + aux file is a hook entity).
-	hooksDir := filepath.Join(root, ".claude", "hooks")
-	if ents, err := os.ReadDir(hooksDir); err == nil {
-		for _, de := range ents {
-			if de.IsDir() {
-				continue
-			}
-			out = append(out, fileKey(root, filepath.Join(hooksDir, de.Name())))
-		}
-	}
 	return out, nil
 }
 

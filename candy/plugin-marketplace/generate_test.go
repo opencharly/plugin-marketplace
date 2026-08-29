@@ -172,14 +172,19 @@ func TestGenerateThenDriftIsClean(t *testing.T) {
 			t.Fatalf("%s must not carry a version field (commit-SHA versioning):\n%s", rel, readFile(t, dir, rel))
 		}
 	}
-	assertFile(t, dir, ".claude/hooks/pre-commit-gate.sh", "pre-commit discipline")
-	assertFile(t, dir, ".claude/hooks/gitcmd.py", "AUX file")
-	assertFile(t, dir, ".claude/settings.json", "permissions", "claude-md-management@claude-plugins-official",
-		"charly-core@charly-plugins", "charly-infrastructure@charly-plugins", "pre-commit-gate.sh", "opencharly/marketplace")
-	assertFile(t, dir, "CLAUDE.md", "BEGIN GENERATED SKILL DISPATCHER", "postgres / postgresql / pg",
-		"/charly-infrastructure:postgresql")
-	// settings preserves the hand-owned keys (permissions + the official plugin) while
-	// regenerating the charly-* enabledPlugins + the hooks wiring.
+	// The generator writes the CORPUS AND NOTHING ELSE. It formerly also emitted charly's
+	// harness surface — .claude/hooks/*, a .claude/settings.json merge and the R0 dispatcher
+	// splice — an unrelated second job that forced root to be a charly checkout. These
+	// assertions are the inverse of the ones they replace: nothing may appear outside out.
+	// Hooks were CREATED by the generator, so they must now be absent entirely.
+	assertNotWritten(t, dir, ".claude/hooks/pre-commit-gate.sh")
+	assertNotWritten(t, dir, ".claude/hooks/gitcmd.py")
+	// settings.json and CLAUDE.md are fixture INPUTS the generator used to rewrite in place;
+	// existence proves nothing, so assert they come back byte-identical instead.
+	assertUnchanged(t, dir, ".claude/settings.json", fixtureSettings)
+	assertUnchanged(t, dir, "CLAUDE.md", fixtureClaudeMD)
+	// settings.json is untouched now, so the hand-owned keys survive trivially — asserted
+	// here as a regression guard on the fixture itself.
 	settings := readFile(t, dir, ".claude/settings.json")
 	if !strings.Contains(settings, `"permissions"`) || !strings.Contains(settings, `"claude-md-management@claude-plugins-official"`) {
 		t.Fatalf("settings.json lost hand-owned keys:\n%s", settings)
@@ -349,21 +354,13 @@ func TestGenerateSplitOut(t *testing.T) {
 	assertFile(t, out, "kimi.plugin.json", `"name": "charly"`)
 	assertFile(t, out, "package.json", "opencharly-marketplace")
 	assertFile(t, out, "profiles.json", "charly-infrastructure")
-	// The setup launcher must run FROM a charly checkout (the charly CLI prescans the
-	// marketplace word from the cwd's project root) with explicit, absolute --root/--out.
-	// The checkout is resolved from $CHARLY_SRC or a sibling clone, NOT a nested ./charly
-	// submodule — that submodule was removed because declaring it dragged the whole charly
-	// repo into consumer fetch trees. emit_setup_test.go executes the launcher and asserts
-	// the arguments it actually passes; this is the shape check on the emitted artifact.
-	setup := readFile(t, out, "setup")
-	for _, want := range []string{`cd "$charly_src"`, `drift --root "$charly_src" --out "$here"`, `generate --root "$charly_src" --out "$here"`} {
-		if !strings.Contains(setup, want) {
-			t.Fatalf("setup launcher must carry %q (the cwd/flag contract):\n%s", want, setup)
-		}
-	}
-	// Harness surface stays at root; the legacy corpus dir at <root>/plugins must NOT exist.
-	assertFile(t, dir, ".claude/hooks/pre-commit-gate.sh", "pre-commit discipline")
-	assertFile(t, dir, ".claude/settings.json", "charly-core@charly-plugins")
+	// The setup launcher is gone: it existed only to run generation LOCALLY from a charly
+	// checkout, which is the workflow this cutover removes. Generation runs in the
+	// marketplace repo's own GitHub workflow.
+	assertNotWritten(t, out, "setup")
+	// Nothing is written outside the corpus any more.
+	assertNotWritten(t, dir, ".claude/hooks/pre-commit-gate.sh")
+	assertUnchanged(t, dir, ".claude/settings.json", fixtureSettings)
 	assertFile(t, dir, "CLAUDE.md", "BEGIN GENERATED SKILL DISPATCHER")
 	if _, err := os.Stat(filepath.Join(dir, "plugins")); !os.IsNotExist(err) {
 		t.Fatalf("legacy <root>/plugins must not exist when --out is given (err=%v)", err)
@@ -371,5 +368,26 @@ func TestGenerateSplitOut(t *testing.T) {
 	// drift against the split trees is a no-op.
 	if err := drift(dir, out); err != nil {
 		t.Fatalf("drift after split generate must be clean: %v", err)
+	}
+}
+
+// assertNotWritten fails if the generator produced a path it must no longer touch. The
+// generator's only job is the marketplace corpus under --out; anything it writes outside that
+// (charly's .claude/ surface, the CLAUDE.md/AGENTS.md dispatcher splice, the setup launcher) is
+// the second job this cutover deleted.
+// assertUnchanged fails if the generator modified a file it was given as input. The old
+// emitters rewrote .claude/settings.json and spliced CLAUDE.md in place; both must now come
+// back exactly as written.
+func assertUnchanged(t *testing.T, base, rel, want string) {
+	t.Helper()
+	if got := readFile(t, base, rel); got != want {
+		t.Fatalf("%s was modified — the generator must emit the corpus and nothing else:\n%s", rel, got)
+	}
+}
+
+func assertNotWritten(t *testing.T, base, rel string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(base, filepath.FromSlash(rel))); err == nil {
+		t.Fatalf("%s was written — the generator must emit the corpus and nothing else", rel)
 	}
 }
