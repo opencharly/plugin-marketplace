@@ -38,6 +38,12 @@ func readKinds(root string) (*kindSet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("collect entities: %w", err)
 	}
+	// One NAME can arrive from several sources in a single closure — most often the same
+	// repo resolved at two tags, because the refs list pins it directly while something in
+	// the transitive closure pins an older tag. Assigning into the map below is
+	// last-write-wins over an unordered collection, so resolve the winner explicitly first.
+	// See resolve.go for the rule and the measurements behind it.
+	ents = dedupeEntities(ents)
 	ks := &kindSet{Skills: map[string]spec.Skill{}, Hooks: map[string]spec.Hook{}}
 	for _, e := range ents {
 		switch e.Kind {
