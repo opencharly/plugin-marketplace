@@ -2,16 +2,17 @@ package marketplace
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
-// generate renders every generated artifact into the two trees: the marketplace corpus under out,
-// the charly-local harness surface under root. Both generate and drift run the SAME emissions
-// pipeline (readKinds → buildModel → buildEmissions); generate prunes + writes it, drift
-// compares it byte-for-byte with the artifacts ON DISK and fails closed on any difference.
+// generate renders the marketplace corpus under out. It has exactly one job: the generator no
+// longer writes charly's harness surface (.claude/hooks, the .claude/settings.json merge, the R0
+// dispatcher splice) — that second job forced root to be a charly checkout and is deleted.
+// Both generate and drift run the SAME emissions pipeline (readKinds → buildModel →
+// buildEmissions); generate prunes + writes it, drift compares it byte-for-byte with the
+// artifacts ON DISK and fails closed on any difference.
 //
 // Both sides of that comparison are the working tree: readKinds walks the on-disk sources and
 // readOnDisk is an os.ReadFile. Git is never consulted — drift proves "regeneration is a no-op",
@@ -26,21 +27,12 @@ func generate(root, out string) error {
 	if err != nil {
 		return err
 	}
-	em, err := buildEmissions(root, ks, families)
-	if err != nil {
-		return err
-	}
+	em := buildEmissions(ks, families)
 	if err := pruneGenerated(root, out, families, ks); err != nil {
 		return fmt.Errorf("prune generated: %w", err)
 	}
 	if err := em.writeAll(root, out); err != nil {
 		return fmt.Errorf("write generated: %w", err)
-	}
-	applyHookModes(root, ks)
-	// The setup launcher is a documented ./setup <harness> <profile> entry point (the README's
-	// contract) — it must be executable (the emissions map carries bytes only).
-	if err := os.Chmod(filepath.Join(out, "setup"), 0o755); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("chmod setup: %w", err)
 	}
 	report(out, em, families)
 	return nil
@@ -48,20 +40,18 @@ func generate(root, out string) error {
 
 // buildEmissions is the single emission pipeline both generate and drift run: every artifact,
 // keyed by repo-root-relative path.
-func buildEmissions(root string, ks *kindSet, families []family) (emissions, error) {
+// buildEmissions produces the marketplace corpus and nothing else. The generator formerly also
+// wrote charly's own harness surface (.claude/hooks, a .claude/settings.json merge, and the R0
+// dispatcher splice into CLAUDE.md/AGENTS.md) — an unrelated second job that is what forced
+// --root to be a charly checkout. Those emitters are deleted; charly's .claude/ is committed and
+// hand-maintained, and the dispatcher table is hand-maintained prose.
+func buildEmissions(ks *kindSet, families []family) emissions {
 	em := emissions{}
 	emitSkills(em, families)
 	emitPluginsJSON(em, families)
 	emitMarketplace(em, ks, families)
 	emitCatalogs(em, ks, families)
-	if err := emitHooks(em, ks, root); err != nil {
-		return nil, err
-	}
-	if err := emitDispatcher(em, root, families); err != nil {
-		return nil, err
-	}
-	emitSetup(em)
-	return em, nil
+	return em
 }
 
 // drift runs the same pipeline in memory and compares with the on-disk generated artifacts (the
@@ -77,10 +67,7 @@ func drift(root, out string) error {
 	if err != nil {
 		return err
 	}
-	em, err := buildEmissions(root, ks, families)
-	if err != nil {
-		return err
-	}
+	em := buildEmissions(ks, families)
 	var diffs []string
 	for rel := range em {
 		want := em[rel]
