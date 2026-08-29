@@ -10,16 +10,23 @@ import (
 // profiles.json (the developer/user/container_families membership the setup installer used).
 // All derive entirely from the marketplace entity — the single source.
 
+// marketplaceManifest is the Claude Code catalog shape. `description` and `version` are
+// TOP-LEVEL marketplace fields per the plugin-marketplace spec; `metadata` is defined as
+// carrying `pluginRoot`, so description/version nested there were never read as the
+// marketplace's own description/version. `renames` maps a former plugin name to its current
+// one and is omitted while empty. The spec also allows a null value to mark a plugin as
+// REMOVED; map[string]string cannot express that, which is deliberate for now -- nothing in
+// this emitter populates Renames, so the removal case has no producer. Switch to
+// map[string]*string at the same time as the first caller that needs it, not before.
 type marketplaceManifest struct {
 	Name  string `json:"name"`
 	Owner struct {
 		Name string `json:"name"`
 	} `json:"owner"`
-	Metadata struct {
-		Description string `json:"description"`
-		Version     string `json:"version"`
-	} `json:"metadata"`
-	Plugins []marketplacePluginEntry `json:"plugins"`
+	Description string                   `json:"description,omitempty"`
+	Version     string                   `json:"version,omitempty"`
+	Renames     map[string]string        `json:"renames,omitempty"`
+	Plugins     []marketplacePluginEntry `json:"plugins"`
 }
 
 type marketplacePluginEntry struct {
@@ -97,8 +104,8 @@ func buildMarketplace(ks *kindSet, families []family) marketplaceManifest {
 	var m marketplaceManifest
 	m.Name = ks.Marketplace.Name
 	m.Owner.Name = pluginAuthor
-	m.Metadata.Description = ks.Marketplace.Description
-	m.Metadata.Version = ks.Marketplace.Version
+	m.Description = ks.Marketplace.Description
+	m.Version = ks.Marketplace.Version
 	for _, f := range families {
 		var e marketplacePluginEntry
 		e.Name = "charly-" + f.Name
