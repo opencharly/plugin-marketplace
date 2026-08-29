@@ -349,11 +349,14 @@ func TestGenerateSplitOut(t *testing.T) {
 	assertFile(t, out, "kimi.plugin.json", `"name": "charly"`)
 	assertFile(t, out, "package.json", "opencharly-marketplace")
 	assertFile(t, out, "profiles.json", "charly-infrastructure")
-	// The setup launcher must run FROM the pinned charly checkout (the charly CLI prescans
-	// the marketplace word from the cwd's project root) with explicit --root/--out — the
-	// launcher-cwd fix (the marketplace repo's ./setup + ./setup --check contract).
+	// The setup launcher must run FROM a charly checkout (the charly CLI prescans the
+	// marketplace word from the cwd's project root) with explicit, absolute --root/--out.
+	// The checkout is resolved from $CHARLY_SRC or a sibling clone, NOT a nested ./charly
+	// submodule — that submodule was removed because declaring it dragged the whole charly
+	// repo into consumer fetch trees. emit_setup_test.go executes the launcher and asserts
+	// the arguments it actually passes; this is the shape check on the emitted artifact.
 	setup := readFile(t, out, "setup")
-	for _, want := range []string{`cd "$(dirname "$0")/charly"`, "drift --root . --out ..", "generate --root . --out .."} {
+	for _, want := range []string{`cd "$charly_src"`, `drift --root "$charly_src" --out "$here"`, `generate --root "$charly_src" --out "$here"`} {
 		if !strings.Contains(setup, want) {
 			t.Fatalf("setup launcher must carry %q (the cwd/flag contract):\n%s", want, setup)
 		}
