@@ -51,6 +51,8 @@ func buildEmissions(ks *kindSet, families []family) emissions {
 	emitPluginsJSON(em, families)
 	emitMarketplace(em, ks, families)
 	emitCatalogs(em, ks, families)
+	emitDispatcher(em, families)
+	emitOpencodeIndex(em, ks, families)
 	return em
 }
 

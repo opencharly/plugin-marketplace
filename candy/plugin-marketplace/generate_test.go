@@ -166,6 +166,23 @@ func TestGenerateThenDriftIsClean(t *testing.T) {
 	assertFile(t, dir, "plugins/.agents/plugins/marketplace.json", "charly-plugins", "./core", "INSTALLED_BY_DEFAULT")
 	assertFile(t, dir, "plugins/kimi.plugin.json", `"name": "charly"`, "./core/skills", "./infrastructure/skills")
 	assertFile(t, dir, "plugins/package.json", "opencharly-marketplace", "pi-package", "./*/skills")
+	// The R0 dispatcher projection: every skill entity with `triggers:` contributes one row
+	// pointing at its canonical `/charly-<family>:<name>` reference. The fixture carries the
+	// markers hand-written in CLAUDE.md (an INPUT the generator must not touch) and the
+	// generated artifact here is DISPATCHER.md.
+	assertFile(t, dir, "plugins/DISPATCHER.md",
+		dispatcherBegin, dispatcherEnd,
+		"| postgres / postgresql / pg | `/charly-infrastructure:postgresql` |",
+		"| charly status / status of a pod | `/charly-core:charly-status` |")
+	// The opencode skills index mirrors the corpus's skill files under the flat
+	// `<name>/<file>` layout opencode's skills.urls expects.
+	assertFile(t, dir, "plugins/.well-known/skills/index.json",
+		`"name": "postgresql"`,
+		`"files": [
+        "SKILL.md",
+        "references/configuration.md"
+      ]`,
+		`"name": "charly-status"`, `"version": "3.2.0"`)
 	// per-plugin manifests carry NO version field (commit-SHA versioning — Claude Code docs).
 	for _, rel := range []string{"plugins/core/.claude-plugin/plugin.json", "plugins/infrastructure/.claude-plugin/plugin.json"} {
 		if strings.Contains(readFile(t, dir, rel), `"version"`) {
@@ -354,6 +371,9 @@ func TestGenerateSplitOut(t *testing.T) {
 	assertFile(t, out, "kimi.plugin.json", `"name": "charly"`)
 	assertFile(t, out, "package.json", "opencharly-marketplace")
 	assertFile(t, out, "profiles.json", "charly-infrastructure")
+	assertFile(t, out, "DISPATCHER.md", dispatcherBegin,
+		"| postgres / postgresql / pg | `/charly-infrastructure:postgresql` |")
+	assertFile(t, out, ".well-known/skills/index.json", `"name": "postgresql"`)
 	// The setup launcher is gone: it existed only to run generation LOCALLY from a charly
 	// checkout, which is the workflow this cutover removes. Generation runs in the
 	// marketplace repo's own GitHub workflow.

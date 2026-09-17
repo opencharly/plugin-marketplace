@@ -89,6 +89,8 @@ func scanGenerated(root, outDir string, families []family, ks *kindSet) ([]strin
 	addCorpus("plugins/kimi.plugin.json")
 	addCorpus("plugins/package.json")
 	addCorpus("plugins/profiles.json")
+	addCorpus("plugins/DISPATCHER.md")
+	addCorpus("plugins/.well-known/skills/index.json")
 	return out, nil
 }
 
