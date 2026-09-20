@@ -8,7 +8,77 @@
 # Declaring discover: is the whole fix: the candy is scanned, the CUE schema gate
 # applies, and the STOCK `charly box validate` step starts working with no workflow
 # change. This file declares no entities of its own - it only tells charly where to look.
-version: 2026.232.0520
+version: 2026.249.2125
+defaults:
+    platform:
+        - linux/amd64
+    tag: auto
+    registry: ghcr.io/opencharly
+    build:
+        - rpm
+    merge:
+        auto: false
+        max_mb: 128
 discover:
     - path: candy
       recursive: true
+
+# =============================================================================
+# marketplace-app + check-marketplace — the R10 bed for the published
+# marketplace corpus. Moved here from opencharly/charly's charly.yml, which
+# cannot exercise this candy as in-development code (the bed's dev-tree override
+# resolves the bed project's own superproject, not the candy owner), so the
+# artifact owner tests its own candy locally.
+#
+# The bed builds a minimal box composing the LOCAL plugin-marketplace candy
+# (discovered from candy/ above), whose plan: clones the PUBLISHED
+# opencharly/marketplace repo at the immutable MARKETPLACE_REF and gates its
+# SHAPE. The distro tag chain is load-bearing (the docs-site-app precedent): the
+# package resolver walks the IMAGE's declared chain most-specific-first, so a box
+# that declares `base:` alone matches no per-distro section and silently installs
+# nothing.
+# =============================================================================
+marketplace-app:
+    candy:
+        version: 2026.218.1200
+        base: quay.io/fedora/fedora:43
+        description: |-
+            The marketplace-corpus box: a minimal Fedora base composing the local
+            plugin-marketplace candy, whose plan: clones the published
+            opencharly/marketplace repo at the pinned MARKETPLACE_REF and gates its
+            shape (catalogs, manifests, baked headers, setup). The checks run in BOTH
+            contexts, so `charly check box marketplace-app` proves the published
+            corpus shape without deploying anything, and `charly check live`
+            re-proves it against the running pod.
+        distro:
+            - fedora:43
+            - fedora
+        candy:
+            - plugin-marketplace
+check-marketplace:
+    pod:
+        image: marketplace-app
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 bed for the published marketplace corpus. Building the marketplace-app box ran the plugin-marketplace candy's plan: — the clone at the pinned MARKETPLACE_REF plus the shape gates (catalogs, no-version manifests, baked skill headers, executable pinned-commit check); deploying the pod to steady state proves the box builds, starts, and stays up. The generator's fail-closed drift gate + the Go coverage are covered by the plugin's Go tests and the marketplace repo's own deploy workflow; this bed covers the published artifact those produce.
+        plan:
+            - check: the marketplace-app pod reached steady state (the corpus-gating box runs)
+              id: marketplace-pod-running
+              exit_status: 0
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-marketplace
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} status --json
+                in_container: false
+            - check: the published marketplace clone is present in the running pod
+              id: marketplace-clone-present
+              exit_status: 0
+              stdout:
+                - contains: charly-plugins
+              context:
+                - runtime
+              command: cat /srv/marketplace/.claude-plugin/marketplace.json
