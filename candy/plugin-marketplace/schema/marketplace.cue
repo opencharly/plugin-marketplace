@@ -1,17 +1,19 @@
-// plugin-marketplace's OWN self-contained CUE schema — the SINGLE SOURCE for this
-// plugin's declaration surface, served over the Describe channel (there is no
-// schema-less plugin). It is used two ways exactly like every other plugin's schema:
+// plugin-marketplace's OWN self-contained CUE schema — the SINGLE SOURCE for this plugin's
+// served declaration surface (there is no schema-less plugin: every plugin ships a
+// non-empty schema over Describe).
 //
-//  1. GENERATE the Go params — `cue exp gengotypes` → ../params/cue_types_gen.go.
-//  2. SERVE over Describe — the host splices `base ++ plugin` at the load gate
-//     (registerPluginUnitSchema), so the plugin's declarations travel WITH it and a
-//     self-contained schema that will not splice is a LOUD load failure.
+// SELF-CONTAINED and PACKAGE-LESS: it references no base def and carries no package
+// clause, so it compiles STANDALONE — the property the SDK's serve-side compile needs
+// and the property that lets the host splice `base ++ plugin` at the load gate
+// (registerPluginUnitSchema); a self-contained schema that will not splice is a LOUD
+// load failure.
 //
-// `command:marketplace`'s authored input is its pass-through CLI grammar
-// (`marketplace generate|drift` plus flags), not a structured plugin_input, so this
-// schema DOCUMENTS the command contract and the configuration surface the generator
-// reads. SELF-CONTAINED: it references no base def, so it compiles STANDALONE (the
-// property the SDK's serve-side compile and `cue exp gengotypes` both need).
+// NO GO CONSUMER: the plugin declares no typed `plugin_input` (its authored input is
+// its pass-through CLI grammar), so this schema generates NO `params` package and has
+// NO `cue exp gengotypes` artifact — it is the SERVED documentation/config surface,
+// not a code-generation source.
+//
+// It DOCUMENTS the `command: marketplace` contract and the pinned-corpus configuration surface (`MARKETPLACE_REPO` / `MARKETPLACE_REF`).
 #MarketplacePlugin: {
 	// The command word the plugin serves.
 	command: "marketplace"
