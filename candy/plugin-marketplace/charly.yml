@@ -1,7 +1,5 @@
-version: 2026.232.0520
 plugin-marketplace:
     candy:
-        version: 2026.218.1200
         description: |-
             RUNTIME (out-of-process) charly plugin serving `charly marketplace …` — the generator
             that regenerates the ENTIRE `charly-plugins` marketplace + harness surface from candy
