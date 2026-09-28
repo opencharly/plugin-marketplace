@@ -1,7 +1,5 @@
-version: 2026.232.0520
 plugin-marketplace:
     candy:
-        version: 2026.218.1200
         description: |-
             RUNTIME (out-of-process) charly plugin serving `charly marketplace …` — the generator
             that regenerates the ENTIRE `charly-plugins` marketplace + harness surface from candy
@@ -55,7 +53,6 @@ plugin-marketplace:
               context:
                 - build
               command: "true"
-
             - run: clone the published marketplace at the pinned commit
               command: |
                 rm -rf /srv/marketplace
@@ -67,7 +64,6 @@ plugin-marketplace:
                 # cached layer carries a stale sha (the docs-site bed precedent).
                 git -C /srv/marketplace rev-parse HEAD > /srv/marketplace/.charly-pinned-commit
               run_as: root
-
             - # The sha is a LITERAL here, duplicating MARKETPLACE_REF above, because charly's
               # check-step substitution does not resolve a candy `var:` — it SKIPS the step with
               # "unresolved variables" instead, turning this guard into a non-event while the bed
@@ -82,7 +78,6 @@ plugin-marketplace:
                 - build
                 - runtime
               command: cat /srv/marketplace/.charly-pinned-commit
-
             - check: the Claude Code / Cursor catalog exists and parses, and every entry's source resolves to a real family directory (the corpus shape the marketplace's own drift gate guarantees; the bed re-proves it on the published artifact)
               id: marketplace-claude-catalog
               exit_status: 0
@@ -101,7 +96,6 @@ plugin-marketplace:
                     import os; assert os.path.isdir("/srv/marketplace/"+p["source"][2:]), p["source"]
                 print("charly-plugins catalog OK (%d plugins)" % len(m["plugins"]))
                 '
-
             - check: the Codex / AGENTS catalog exists and every entry's local source resolves
               id: marketplace-agents-catalog
               exit_status: 0
@@ -119,7 +113,6 @@ plugin-marketplace:
                     assert p["source"]["source"]=="local" and os.path.isdir("/srv/marketplace/"+p["source"]["path"][2:]), p
                     assert p["policy"]["installation"]=="INSTALLED_BY_DEFAULT"
                 print("INSTALLED_BY_DEFAULT: %d plugins" % len(m["plugins"]))'
-
             - check: the kimi + pi manifests ship at the marketplace root (the whole marketplace is one kimi plugin and one pi package)
               id: marketplace-kimi-pi-manifests
               exit_status: 0
@@ -134,7 +127,6 @@ plugin-marketplace:
                 grep -q pi-package /srv/marketplace/package.json
                 python3 -c 'import json; m=json.load(open("/srv/marketplace/kimi.plugin.json")); assert m["skills"]'
                 echo "pi-package + kimi manifests present"
-
             - check: a baked corpus skill carries the generator header and the two-key frontmatter contract (the ai.opencharly.skill label the generator bakes)
               id: marketplace-baked-skill
               exit_status: 0
@@ -145,7 +137,6 @@ plugin-marketplace:
                 - build
                 - runtime
               command: cat /srv/marketplace/build/skills/build/SKILL.md
-
             - check: per-family manifests carry NO version field (commit-SHA versioning) and the marketplace repository URL
               id: marketplace-no-version-manifests
               exit_status: 0
@@ -161,7 +152,6 @@ plugin-marketplace:
                 assert "version" not in d, d
                 assert d["repository"].endswith("opencharly/marketplace"), d
                 print("opencharly/marketplace manifest: no version field")'
-
             - check: the setup launcher ships executable at the marketplace root
               id: marketplace-setup-launcher
               exit_status: 0

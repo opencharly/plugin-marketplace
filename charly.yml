@@ -8,7 +8,6 @@
 # Declaring discover: is the whole fix: the candy is scanned, the CUE schema gate
 # applies, and the STOCK `charly box validate` step starts working with no workflow
 # change. This file declares no entities of its own - it only tells charly where to look.
-version: 2026.261.1747
 defaults:
     platform:
         - linux/amd64
@@ -22,7 +21,6 @@ defaults:
 discover:
     - path: candy
       recursive: true
-
 # =============================================================================
 # marketplace-app + check-marketplace — the R10 bed for the published
 # marketplace corpus. Moved here from opencharly/charly's charly.yml, which
@@ -40,7 +38,6 @@ discover:
 # =============================================================================
 marketplace-app:
     candy:
-        version: 2026.218.1200
         base: quay.io/fedora/fedora:43
         description: |-
             The marketplace-corpus box: a minimal Fedora base composing the local
