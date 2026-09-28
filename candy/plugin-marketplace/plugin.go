@@ -20,12 +20,16 @@ package marketplace
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/spec/proto"
 )
+
+//go:embed schema/*.cue
+var schemaFS embed.FS
 
 // calver is the candy's identity CalVer (advertised over Describe).
 const calver = "2026.218.1200"
@@ -34,13 +38,15 @@ const calver = "2026.218.1200"
 // registration, were the plugin ever listed in compiled_plugins).
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta advertises command:marketplace via sdk.NewMeta → BuildCapabilities. A command's args
-// are pass-through CLI tokens, not a structured plugin_input, so the capability carries no
-// InputDef and the plugin ships no CUE schema (the plugin-docs/plugin-alias precedent).
+// NewMeta advertises command:marketplace via sdk.NewMeta → BuildCapabilities, together
+// with this plugin's OWN self-contained CUE schema (schema/marketplace.cue) served over
+// Describe — there is NO schema-less plugin. The command's args are pass-through CLI
+// tokens rather than a structured plugin_input, so the schema documents the command
+// contract and the config surface (the charly.yml `var:` entries).
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
 		[]sdk.ProvidedCapability{{Class: "command", Word: "marketplace"}},
-		nil)
+		schemaFS)
 }
 
 // CliMain is the OUT-OF-PROCESS command entry — the placement this plugin actually ships in.
