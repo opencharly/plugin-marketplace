@@ -50,7 +50,9 @@ executable `setup` launcher, the pinned-commit check).
 
 ## How to use it
 
-The command is invoked directly — no candy composition is needed:
+The command is served **out-of-process** — charly's loader fetches this candy at
+its pinned ref and connects the provider by word, so no project-side candy
+composition is needed:
 
 ```bash
 charly marketplace generate --out /path/to/marketplace
