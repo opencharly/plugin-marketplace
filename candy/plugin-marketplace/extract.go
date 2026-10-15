@@ -31,11 +31,17 @@ func extract(root string) error {
 	if err != nil {
 		return fmt.Errorf("discover repo roots: %w", err)
 	}
-	// The SAME discovery readKinds uses — the remote-aware collector — and then filtered below to
-	// the entities THIS repo owns. Measured, not assumed: the purely-local candywalk.CollectEntities
-	// yields none of these entities, even against this repo's own charly.yml (which carries ~20
-	// skill entities); extract returned 0 for both a hand-built fixture and a copy of the real
-	// layer-charly-internals. Same discovery, then refuse to write anything that is not ours.
+	// Which entities are THIS repo's? NOT "SourceRoot is empty": candywalk sets SourceRoot to the
+	// directory that holds the file for LOCAL entities too — candywalk.go:161,
+	// `found[i].SourceRoot = r.Dir` — and only the doc comment above that field still claims that ""
+	// means local. So the test is membership in the roots RepoRoots just returned.
+	local := make(map[string]bool, len(roots))
+	for _, r := range roots {
+		local[r.Dir] = true
+	}
+	// The SAME discovery readKinds uses, then filtered to the entities this repo owns. Measured, not
+	// assumed: the purely-local candywalk.CollectEntities yields NONE of these entities — extract
+	// returned 0 for a hand-built fixture and for a copy of the real layer-charly-internals.
 	ents, err := candywalk.CollectEntitiesRemote(roots, refs.DownloadRepo)
 	if err != nil {
 		return fmt.Errorf("collect entities: %w", err)
@@ -46,7 +52,7 @@ func extract(root string) error {
 	}
 	moved := 0
 	for _, e := range ents {
-		if e.Kind != "skill" || e.SourceRoot != "" {
+		if e.Kind != "skill" || !local[e.SourceRoot] {
 			continue // only the entities this repository owns
 		}
 		var s spec.Skill
