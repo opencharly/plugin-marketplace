@@ -44,6 +44,13 @@ func readKinds(root string) (*kindSet, error) {
 	// last-write-wins over an unordered collection, so resolve the winner explicitly first.
 	// See resolve.go for the rule and the measurements behind it.
 	ents = dedupeEntities(ents)
+	// The trees each skill's files are read from, per owning candy (spec#247's `skills:`, default
+	// `.agents/skills`). Built from the SAME deduped slice, so a file read can never disagree with
+	// the entity the dedupe chose — see skillfile.go.
+	trees, err := skillTrees(ents)
+	if err != nil {
+		return nil, err
+	}
 	ks := &kindSet{Skills: map[string]spec.Skill{}, Hooks: map[string]spec.Hook{}}
 	for _, e := range ents {
 		switch e.Kind {
@@ -51,6 +58,13 @@ func readKinds(root string) (*kindSet, error) {
 			var s spec.Skill
 			if err := e.Value.Decode(&s); err != nil {
 				return nil, fmt.Errorf("skill %q: decode: %w", e.Name, err)
+			}
+			declared, ok := trees[s.Owner]
+			if !ok {
+				declared = []string{agentsSkillsDir}
+			}
+			if err := fillSkillFromFile(&s, e.Name, e.SourceRoot, root, declared); err != nil {
+				return nil, err
 			}
 			ks.Skills[e.Name] = s
 		case "hook":
