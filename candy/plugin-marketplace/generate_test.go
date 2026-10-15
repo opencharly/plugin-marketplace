@@ -1,9 +1,11 @@
 package marketplace
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -409,5 +411,131 @@ func assertNotWritten(t *testing.T, base, rel string) {
 	t.Helper()
 	if _, err := os.Stat(filepath.Join(base, filepath.FromSlash(rel))); err == nil {
 		t.Fatalf("%s was written — the generator must emit the corpus and nothing else", rel)
+	}
+}
+
+// orderManifestInline is one skill with THREE references whose DOCUMENT order is not alphabetical.
+// The entity form used to emit them in this order; the file form emits them in stem order, so the
+// same skill reordered its own entry in .well-known/skills/index.json just by moving house.
+const orderManifestInline = `marketplace:
+    marketplace:
+        name: charly-plugins
+        version: 3.2.0
+        description: Ordering fixture.
+        families:
+            internals:
+                category: development
+                description: Internals.
+                keywords: [internals]
+                profiles: [user]
+order-demo:
+    candy:
+        description: Fixture candy owning one skill.
+        plan:
+            - check: the fixture is present
+              command: "true"
+alpha-skill:
+    skill:
+        name: alpha
+        family: internals
+        owner: order-demo
+        description: Fixture skill.
+        content: |
+            # alpha
+
+            Body.
+        references:
+            - name: zulu
+              content: |
+                # Zulu
+            - name: alpha
+              content: |
+                # Alpha
+            - name: mike
+              content: |
+                # Mike
+`
+
+// orderManifestFiles is the same node in the wave's END state: prose and references deleted, so the
+// files beside the skill are the only source.
+const orderManifestFiles = `marketplace:
+    marketplace:
+        name: charly-plugins
+        version: 3.2.0
+        description: Ordering fixture.
+        families:
+            internals:
+                category: development
+                description: Internals.
+                keywords: [internals]
+                profiles: [user]
+order-demo:
+    candy:
+        description: Fixture candy owning one skill.
+        plan:
+            - check: the fixture is present
+              command: "true"
+alpha-skill:
+    skill:
+        name: alpha
+        family: internals
+        owner: order-demo
+`
+
+// TestGenerate_IndexFilesOrderIsCanonicalAcrossTheMove is the byte comparison the relocation's
+// central invariant rests on: the SAME skill, once with its prose inline and once with it extracted
+// to .agents/skills, must emit the SAME .well-known/skills/index.json — because that artifact is
+// built from `s.References` order, and the two source forms do not agree on that order unless the
+// model canonicalizes it (opencharly/plugin-marketplace#28).
+//
+// The fixture's document order (zulu, alpha, mike) is deliberately NOT alphabetical, so a model that
+// lets the source form decide fails here whichever form it prefers.
+func TestGenerate_IndexFilesOrderIsCanonicalAcrossTheMove(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		t.Helper()
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("candy/order/charly.yml", orderManifestInline)
+
+	// Form A — the prose is still inline.
+	if err := generate(root, filepath.Join(root, "out-inline")); err != nil {
+		t.Fatalf("generate (inline form): %v", err)
+	}
+	inline := readFile(t, filepath.Join(root, "out-inline"), ".well-known/skills/index.json")
+
+	// The move: extract writes the files, then the node loses its prose — the wave's end state.
+	if err := extract(root); err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	write("candy/order/charly.yml", orderManifestFiles)
+
+	// Form B — the prose is read from the files.
+	if err := generate(root, filepath.Join(root, "out-files")); err != nil {
+		t.Fatalf("generate (file form): %v", err)
+	}
+	files := readFile(t, filepath.Join(root, "out-files"), ".well-known/skills/index.json")
+
+	if inline != files {
+		t.Errorf("the corpus is not byte-identical across the move:\n  inline %q\n  files  %q", inline, files)
+	}
+
+	// And the order is CANONICAL, not merely equal.
+	var idx opencodeIndex
+	if err := json.Unmarshal([]byte(files), &idx); err != nil {
+		t.Fatalf("decode index.json: %v", err)
+	}
+	if len(idx.Skills) != 1 {
+		t.Fatalf("index.json lists %d skills, want 1", len(idx.Skills))
+	}
+	want := []string{"SKILL.md", "references/alpha.md", "references/mike.md", "references/zulu.md"}
+	if got := idx.Skills[0].Files; !slices.Equal(got, want) {
+		t.Errorf("files order = %v, want %v", got, want)
 	}
 }
