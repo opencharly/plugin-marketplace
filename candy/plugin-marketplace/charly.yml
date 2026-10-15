@@ -42,7 +42,7 @@ plugin-marketplace:
             # clone layer's cache key moves only when this string moves. It must equal the
             # marketplace repo's current `main` head; `task marketplace:pin` checks that, and the
             # pinned-commit check below asserts it from inside the built image.
-            MARKETPLACE_REF: b89cc57247f35c0708029751e67dcb1d9a930d83
+            MARKETPLACE_REF: 0f68fddf63a86c3381d5e9cc3f2d92b3f7caf0e7
         distro:
             fedora:
                 package:
@@ -75,7 +75,7 @@ plugin-marketplace:
               id: marketplace-pinned-commit
               exit_status: 0
               stdout:
-                - contains: b89cc57247f35c0708029751e67dcb1d9a930d83
+                - contains: 0f68fddf63a86c3381d5e9cc3f2d92b3f7caf0e7
               context:
                 - build
                 - runtime
@@ -160,12 +160,22 @@ plugin-marketplace:
                 assert d["repository"].endswith("opencharly/marketplace"), d
                 print("opencharly/marketplace manifest: no version field")'
 
-            - check: the setup launcher ships executable at the marketplace root
-              id: marketplace-setup-launcher
+            - check: the pinned corpus ships its generation input and its dispatcher
+              id: marketplace-corpus-entry-points
               exit_status: 0
               stdout:
-                - contains: charly marketplace
+                - contains: candy/charly-marketplace/charly.yml
+                - contains: DISPATCHER.md
               context:
                 - build
                 - runtime
-              command: test -x /srv/marketplace/setup && head -2 /srv/marketplace/setup
+              command: |
+                # Replaces the setup-launcher arm, which asserted an executable `setup` the marketplace
+                # repo deliberately removed between the old pin and this one. A stale contract in a bed is
+                # a red gate for a green change, so the arm now asserts what this bed actually exists to
+                # prove: that the PINNED commit carries the corpus and the two things that make it the
+                # generated corpus rather than a directory of files — its refs list (the ONE generation
+                # input) and the generated dispatcher.
+                test -f /srv/marketplace/candy/charly-marketplace/charly.yml &&
+                test -f /srv/marketplace/DISPATCHER.md &&
+                echo candy/charly-marketplace/charly.yml && echo DISPATCHER.md
