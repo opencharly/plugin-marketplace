@@ -97,7 +97,13 @@ func extractSkills(root string, ents []candywalk.Entity) (int, error) {
 		if name == "" {
 			name = e.Name // the node name IS the id (spec#247)
 		}
-		declared, ok := trees[e.Name]
+		// The tree comes from the OWNING CANDY's declaration, keyed exactly as readkinds.go keys it
+		// (`trees[s.Owner]`) — `skillTrees` builds the map from the `candy` entities and keys it by
+		// CANDY name. Keying it by the skill's own node name can never match, so a repo that declares
+		// a non-default tree would have its body written to `.agents/skills/<name>/SKILL.md` while
+		// `fillSkillFromFile` looks for `<declared-tree>/<name>/SKILL.md` — the file extract wrote
+		// would not be the file the reader reads.
+		declared, ok := trees[s.Owner]
 		if !ok {
 			declared = []string{agentsSkillsDir}
 		}
