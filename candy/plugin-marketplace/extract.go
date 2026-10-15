@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/candywalk"
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -30,7 +31,12 @@ func extract(root string) error {
 	if err != nil {
 		return fmt.Errorf("discover repo roots: %w", err)
 	}
-	ents, err := candywalk.CollectEntities(roots)
+	// The SAME discovery readKinds uses — the remote-aware collector — and then filtered below to
+	// the entities THIS repo owns. Measured, not assumed: the purely-local candywalk.CollectEntities
+	// yields none of these entities, even against this repo's own charly.yml (which carries ~20
+	// skill entities); extract returned 0 for both a hand-built fixture and a copy of the real
+	// layer-charly-internals. Same discovery, then refuse to write anything that is not ours.
+	ents, err := candywalk.CollectEntitiesRemote(roots, refs.DownloadRepo)
 	if err != nil {
 		return fmt.Errorf("collect entities: %w", err)
 	}
