@@ -13,6 +13,7 @@ import (
 type marketplaceCLI struct {
 	Generate generateCmd `cmd:"" help:"Regenerate the charly-plugins marketplace + harness surface from candy config"`
 	Drift    driftCmd    `cmd:"" help:"Fail-closed no-op check: regenerate in memory and compare with the artifacts on disk (git is never consulted)"`
+	Extract  extractCmd  `cmd:"" help:"Move each skill's in-line body into the file its repo owns (authored shape, no marker; never writes the corpus)"`
 }
 
 // generateCmd renders every generated artifact: the marketplace corpus into --out (the
