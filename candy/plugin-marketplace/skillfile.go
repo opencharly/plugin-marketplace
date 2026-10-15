@@ -3,6 +3,7 @@ package marketplace
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/opencharly/sdk/candywalk"
 	"github.com/opencharly/spec/spec"
@@ -119,4 +120,30 @@ func fillSkillFromFile(s *spec.Skill, node, sourceRoot, root string, trees []str
 		s.References = refs
 	}
 	return nil
+}
+
+// canonicalizeReferences puts a skill's references in the ONE order both source forms can agree
+// on, and it is called on every skill as it enters the model (readkinds.go), AFTER the file-vs-entity
+// reconciliation — so no source form can escape it.
+//
+// WHY IT IS NEEDED. An ORDER-SENSITIVE artifact is built from this slice: emitOpencodeIndex writes
+// each skill's `files` list in `s.References` order. The two source forms disagree about that order
+// through no fault of their own:
+//
+//   - the FILE form has no document order to preserve — a directory listing is unordered, so
+//     candywalk.ReadSkillFile sorts by stem;
+//   - the ENTITY form arrives in the manifest's document order.
+//
+// So a skill that merely moved house reordered its own entry in `.well-known/skills/index.json`,
+// which means the corpus could not be byte-identical across a move — the invariant this whole
+// relocation is proven by (opencharly/plugin-marketplace#28). The file form's sort cannot be the
+// answer: document order is not recoverable from a directory listing. Sorting here is, and it makes
+// the entity form agree with the file form instead of the other way round.
+//
+// NOTHING DEPENDS ON THE OTHER ORDER. Each reference is emitted as its own `references/<name>.md`
+// file, and the per-skill `files` array in index.json is a manifest of those files, fetched one by
+// one by the consumer. The order is presentation, which is exactly why it must be canonical rather
+// than incidental.
+func canonicalizeReferences(refs []spec.SkillReference) {
+	sort.Slice(refs, func(i, j int) bool { return refs[i].Name < refs[j].Name })
 }

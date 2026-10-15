@@ -66,6 +66,10 @@ func readKinds(root string) (*kindSet, error) {
 			if err := fillSkillFromFile(&s, e.Name, e.SourceRoot, root, declared); err != nil {
 				return nil, err
 			}
+			// ONE canonical reference order, applied AFTER both source forms have been settled —
+			// this is the single funnel every skill enters the model through, so no source form can
+			// escape it (see canonicalizeReferences in skillfile.go).
+			canonicalizeReferences(s.References)
 			ks.Skills[e.Name] = s
 		case "hook":
 			var h spec.Hook
