@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/candywalk"
+	"github.com/opencharly/spec/spec"
 )
 
 // extract_test.go — `marketplace extract`: the round trip and the no-op.
@@ -111,5 +114,131 @@ func TestExtract_StopsMovingOnceTheBodyIsGone(t *testing.T) {
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Error("extract re-created a file for a node with no in-line body — it is not a no-op")
+	}
+}
+
+// skillFixture builds one skill node in the REAL authored shape — a node keyed by its own name
+// whose single key is `skill:` — around an arbitrary body. The body is emitted as a YAML literal
+// block scalar; the test DECODES the fixture back and asserts it is byte-identical to the body it
+// asked for, so a YAML subtlety can never make the comparison vacuous.
+func skillFixture(node, body string) string {
+	indented := "            " + strings.ReplaceAll(body, "\n", "\n            ")
+	return "demo:\n" +
+		"    candy:\n" +
+		"        description: |-\n" +
+		"            Fixture candy owning one skill entity.\n" +
+		"    plan:\n" +
+		"        - run: no-op fixture\n" +
+		"          command: \"true\"\n" +
+		"          context:\n" +
+		"            - build\n" +
+		node + ":\n" +
+		"    skill:\n" +
+		"        name: " + node + "\n" +
+		"        family: internals\n" +
+		"        owner: demo\n" +
+		"        description: |-\n" +
+		"            branch-per-change landing.\n" +
+		"        content: |\n" +
+		indented + "\n" +
+		"        references:\n" +
+		"            - name: validator-and-calver\n" +
+		"              content: |\n" +
+		"                The tag is cut at merge.\n"
+}
+
+// decodeOneSkill reads a fixture back through the SAME file-level reader the walker uses, so the
+// test's expectation comes from the reader rather than from the test's own construction.
+func decodeOneSkill(t *testing.T, root, node string) spec.Skill {
+	t.Helper()
+	ents, err := candywalk.ReadEntityFile(filepath.Join(root, "charly.yml"), candywalk.Root{Dir: root}, ".")
+	if err != nil {
+		t.Fatalf("read the fixture: %v", err)
+	}
+	for _, e := range ents {
+		if e.Kind != "skill" || e.Name != node {
+			continue
+		}
+		var s spec.Skill
+		if err := e.Value.Decode(&s); err != nil {
+			t.Fatalf("decode the fixture: %v", err)
+		}
+		return s
+	}
+	t.Fatalf("the fixture holds no skill node %q", node)
+	return spec.Skill{}
+}
+
+// TestExtract_WritesTheBodyTheReaderReadsBack is the proof the first version of this file lacked,
+// and the one the whole relocation rests on: what `candywalk.ReadSkillFile` reads back from the file
+// `extract` wrote must be the entity's own prose BYTE FOR BYTE — content, description and every
+// reference.
+//
+// The first version asserted a prefix, a `Contains`, and the absence of the marker. All three are
+// presence checks, insensitive to an added byte, so the test could not fail on the defect it was
+// meant to catch: `extract` wrote `skillFrontmatter(name, s.Description) + "\n" + s.Content` while
+// `skillFrontmatter`
+// already ends with the `---\n\n` separator the reader strips once, so every written file read back
+// with a leading newline the entity did not have. Measured on the pilot repo
+// (`layer-charly-internals`): 20 of 20 bodies affected, descriptions and references clean
+// (opencharly/plugin-marketplace#26).
+//
+// The second case is the discriminating one: a body whose FIRST LINES ARE BLANK must round-trip
+// unchanged, so a "fix" that trims leading newlines instead of writing the separator exactly once
+// fails here too — while a writer that trims would also corrupt a body that legitimately opens with
+// a blank line.
+func TestExtract_WritesTheBodyTheReaderReadsBack(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"leads-with-a-title", "# git-workflow\n\nBody.\n"},
+		{"leads-with-blank-lines", "\n\n# git-workflow\n\nBody.\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := writeExtractFixture(t, skillFixture(tc.name, tc.body))
+			want := decodeOneSkill(t, root, tc.name)
+			if want.Content != tc.body {
+				t.Fatalf("fixture: the node decoded to %q, want %q — the fixture cannot carry this case", want.Content, tc.body)
+			}
+
+			if err := extract(root); err != nil {
+				t.Fatalf("extract: %v", err)
+			}
+
+			sf, err := candywalk.ReadSkillFile(filepath.Join(root, agentsSkillsDir), tc.name)
+			if err != nil {
+				t.Fatalf("read the extracted file back: %v", err)
+			}
+			if sf == nil {
+				t.Fatalf("extract wrote no file for %q", tc.name)
+			}
+			if sf.Content != want.Content {
+				t.Errorf("the reader reads a different body than the entity held:\n  entity %q\n  file   %q", want.Content, sf.Content)
+			}
+			if sf.Description != want.Description {
+				t.Errorf("description: entity %q, file %q", want.Description, sf.Description)
+			}
+			if len(sf.References) != len(want.References) {
+				t.Fatalf("references: entity %d, file %d", len(want.References), len(sf.References))
+			}
+			for _, r := range want.References {
+				got, found := "", false
+				for _, f := range sf.References {
+					if f.Stem == r.Name {
+						got, found = f.Content, true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("reference %q is missing from the file tree", r.Name)
+					continue
+				}
+				if got != r.Content {
+					t.Errorf("reference %q: entity %q, file %q", r.Name, r.Content, got)
+				}
+			}
+		})
 	}
 }
