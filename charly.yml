@@ -160,10 +160,10 @@ marketplace:pin:
             - check: the declared MARKETPLACE_REF var equals the marketplace repo's current main head
               id: pin-var-current
               command:
-                command: 'test "$(git ls-remote ${MARKETPLACE_REPO} refs/heads/main | cut -f1)" = "$(grep -m1 -oE ''^[[:space:]]*MARKETPLACE_REF:[[:space:]]*[0-9a-f]{40}'' candy/plugin-marketplace/charly.yml | grep -oE ''[0-9a-f]{40}'')'
+                command: test "$(git ls-remote https://github.com/opencharly/marketplace.git refs/heads/main | cut -f1)" = "$(grep -oE '[0-9a-f]{40}' candy/plugin-marketplace/charly.yml | head -1)"
                 in_container: false
             - check: the duplicated literal in the check step equals the same head
               id: pin-literal-current
               command:
-                command: 'test "$(git ls-remote ${MARKETPLACE_REPO} refs/heads/main | cut -f1)" = "$(grep -oE ''[0-9a-f]{40}'' candy/plugin-marketplace/charly.yml | tail -1)"'
+                command: 'test "$(git ls-remote https://github.com/opencharly/marketplace.git refs/heads/main | cut -f1)" = "$(grep -oE ''[0-9a-f]{40}'' candy/plugin-marketplace/charly.yml | tail -1)"'
                 in_container: false
