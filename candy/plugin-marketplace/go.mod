@@ -5,8 +5,8 @@ go 1.26.4
 require (
 	cuelang.org/go v0.16.1
 	github.com/alecthomas/kong v1.15.0
-	github.com/opencharly/sdk v0.2026237.1545-0.20260825162141-24eba1a516c5
-	github.com/opencharly/spec v0.2026232.521-0.20260824192047-0c29ab15816d
+	github.com/opencharly/sdk v0.2026288.1246
+	github.com/opencharly/spec v0.2026288.1242
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -23,12 +23,14 @@ require (
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/net v0.55.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
 	google.golang.org/grpc v1.61.0 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
