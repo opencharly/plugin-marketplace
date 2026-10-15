@@ -114,7 +114,16 @@ func extractSkills(root string, ents []candywalk.Entity) (int, error) {
 		// The AUTHORED shape: the emitter's two-key frontmatter, then the body — and deliberately
 		// WITHOUT the generator's marker, because the marker is what marks a file as generated and
 		// from here on this file is hand-owned. This is the shape candywalk.ReadSkillFile parses.
-		entry := skillFrontmatter(name, s.Description) + "\n" + s.Content
+		//
+		// `skillFrontmatter` ALREADY ends with the `---\n\n` separator, and that single blank line
+		// is exactly what `splitFrontmatter` strips, with ONE `TrimPrefix` of the newline that
+		// follows the closing fence. Writing a second one hands the reader a body carrying a
+		// leading newline the entity did not have: the generator then rejects the repo in the
+		// mixed state ("the node's inline `content:` and its file disagree") and, once the inline
+		// body is deleted, silently publishes that newline into the corpus. Write the separator
+		// ONCE and let the body be exactly the body — a body that itself starts with blank lines
+		// round-trips too, because nothing here trims.
+		entry := skillFrontmatter(name, s.Description) + s.Content
 		if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(entry), 0o644); err != nil {
 			return moved, fmt.Errorf("skill %q: %w", name, err)
 		}
