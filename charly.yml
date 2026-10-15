@@ -80,3 +80,90 @@ check-marketplace:
               context:
                 - runtime
               command: cat /srv/marketplace/.claude-plugin/marketplace.json
+
+# =============================================================================
+# THE TWO MAINTENANCE RECIPES THIS REPO'S OWN DOCS ALREADY DESCRIBE
+#
+# Seven places name `charly task skills:drift` and `charly task marketplace:pin`
+# and neither existed -- `charly task list` printed "no tasks declared".  This
+# declares them, because the side that holds the INTENT is the documents: the
+# first is named as this repository's gate for a generator change, and a gate
+# that does not exist is worse than no gate, because the docs teach a reader to
+# trust it.
+#
+# An entity is a named node whose KIND is a discriminator nested under the name
+# (`marketplace-app:` carries `candy:`).  A task's discriminator is `task:`, and
+# its body is the base `#Task` from the spec module, whose `plan:` reuses the SAME
+# `#Step` grammar a candy's `plan:` does.
+# =============================================================================
+
+skills:drift:
+    task:
+        description: |-
+            BOTH halves of this repository's drift gate, in one recipe, because the
+            command alone is silent on the half that bites a generator change.
+
+            `charly marketplace drift` regenerates in memory and compares with the
+            artifacts ON DISK -- the corpus under --out, the harness surface under
+            --root -- and NEVER consults git, by design.  So it proves
+            "regeneration is a no-op" and says nothing about whether the tree is
+            committed; a generator run that emits an untracked file passes it.  The
+            second step is that missing half.
+
+            The command names the provider word directly -- `charly marketplace
+            drift` -- and NOT the ${CHARLY_BIN} placeholder this repo's box and bed
+            steps use.  That placeholder is supplied by a build or deploy context,
+            and a standalone task has neither, so the engine reports it as an
+            UNRESOLVED VARIABLE and SKIPS the step.  Measured, twice: a skip is not a
+            failure, so a gate written that way would be silently vacuous -- it would
+            report one step failed rather than two, and never say why.  A task's
+            command must work with the charly binary alone, which is also what
+            /charly-build:docs calls the binary-only-reader rule.
+
+            `--out` is a declared PARAM rather than a bare variable, so a caller can
+            point the drift comparison at their marketplace checkout with
+            `--param out=<path>`; the default names the usual relative path.
+
+            Neither step carries `context:`: a task's steps run in-context by
+            construction (the task grammar reports every step in-context), and with
+            no runtime placeholder in either command there is nothing for a context
+            to resolve.
+        params:
+            out:
+                description: Marketplace corpus root the drift comparison reads (the opencharly/marketplace checkout)
+                default: ../marketplace
+        plan:
+            - check: regeneration is a no-op against the on-disk artifacts
+              id: drift-noop
+              command:
+                command: charly marketplace drift --root . --out ${out}
+                in_container: false
+            - check: the tree is committed -- the half `drift` cannot see
+              id: tree-committed
+              command:
+                command: test -z "$(git status --porcelain)"
+                in_container: false
+
+marketplace:pin:
+    task:
+        description: |-
+            Assert that `var: MARKETPLACE_REF` is an IMMUTABLE COMMIT equal to the
+            opencharly/marketplace repo's CURRENT `main` head, in BOTH places it
+            appears.
+
+            AGENTS.md says the sha "is duplicated as a literal in the check step by
+            design" -- so a pin that is stale in one place and current in the other
+            is exactly the drift this recipe exists to catch.  Both occurrences are
+            asserted against the same live head, which is why it is one task and not
+            two greps.
+        plan:
+            - check: the declared MARKETPLACE_REF var equals the marketplace repo's current main head
+              id: pin-var-current
+              command:
+                command: test "$(git ls-remote https://github.com/opencharly/marketplace.git refs/heads/main | cut -f1)" = "$(grep -oE '[0-9a-f]{40}' candy/plugin-marketplace/charly.yml | head -1)"
+                in_container: false
+            - check: the duplicated literal in the check step equals the same head
+              id: pin-literal-current
+              command:
+                command: 'test "$(git ls-remote https://github.com/opencharly/marketplace.git refs/heads/main | cut -f1)" = "$(grep -oE ''[0-9a-f]{40}'' candy/plugin-marketplace/charly.yml | tail -1)"'
+                in_container: false
