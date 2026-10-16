@@ -50,9 +50,11 @@ func readKinds(root string) (*kindSet, error) {
 	// last-write-wins over an unordered collection, so resolve the winner explicitly first.
 	// See resolve.go for the rule and the measurements behind it.
 	ents = dedupeEntities(ents)
-	// The trees each skill's files are read from, per owning candy (spec#247's `skills:`, default
-	// `.agents/skills`). Built from the SAME deduped slice, so a file read can never disagree with
-	// the entity the dedupe chose — see skillfile.go.
+	// The SKILL trees each skill's files are read from, per owning candy (spec#247's `skills:`,
+	// default `.agents/skills`). Built from the SAME deduped slice, so a file read can never disagree
+	// with the entity the dedupe chose — see skillfile.go. An `agent`-type node is NOT in this map's
+	// scope: a sub-agent definition's path is fixed, and `skills:` — a list of SKILL trees — does not
+	// govern it (D8).
 	trees, err := skillTrees(ents)
 	if err != nil {
 		return nil, err
@@ -67,14 +69,15 @@ func readKinds(root string) (*kindSet, error) {
 			}
 			declared, ok := trees[s.Owner]
 			if !ok {
-				declared = []string{agentsSkillsDir}
+				declared = []string{candywalk.AgentsSkillsDir}
 			}
 			if err := fillSkillFromFile(&s, e.Name, e.SourceRoot, root, declared); err != nil {
 				return nil, err
 			}
 			// ONE canonical reference order, applied AFTER both source forms have been settled —
 			// this is the single funnel every skill enters the model through, so no source form can
-			// escape it (see canonicalizeReferences in skillfile.go).
+			// escape it (see canonicalizeReferences in skillfile.go). An `agent`-type node carries no
+			// references (the emitter publishes none), so this is a no-op for it, not a second rule.
 			canonicalizeReferences(s.References)
 			ks.Skills = append(ks.Skills, s)
 		case "hook":

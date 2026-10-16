@@ -10,9 +10,11 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// extract.go — the INVERSE of emit_skills.go: a local `--root` operation that moves each skill's
-// in-line body OUT of its `skill:` node and into the file the repository owns, in the authored
-// (marker-less) shape candywalk.ReadSkillFile reads back.
+// extract.go — the INVERSE of emit_skills.go: a local `--root` operation that moves each `skill:`
+// node's in-line body OUT of the node and into the file the repository owns, in the authored
+// (marker-less) shape candywalk reads back. BOTH artifact classes move, each to its own tree: a
+// skill to <tree>/<name>/SKILL.md plus references/<stem>.md, an `agent`-type node to
+// .agents/agents/<name>.md.
 //
 // It writes into root — the repo that OWNS the entities — and never into the corpus, because only
 // the generator authors the corpus. The node keeps its routing metadata; only the prose moves. That
@@ -97,6 +99,17 @@ func extractSkills(root string, ents []candywalk.Entity) (int, error) {
 		if name == "" {
 			name = e.Name // the node name IS the id (spec#247)
 		}
+		// An `agent`-type node is a SUB-AGENT DEFINITION, not a skill: its body is ONE file at
+		// .agents/agents/<name>.md, with no entry directory and no references/ half (D8). It is the
+		// only type whose destination does not come from the candy's `skills:` list — so it is
+		// branched BEFORE the tree lookup, not through it.
+		if s.Type == "agent" {
+			if err := writeAgentFile(root, name, s); err != nil {
+				return moved, err
+			}
+			moved++
+			continue
+		}
 		// The tree comes from the OWNING CANDY's declaration, keyed exactly as readkinds.go keys it
 		// (`trees[s.Owner]`) — `skillTrees` builds the map from the `candy` entities and keys it by
 		// CANDY name. Keying it by the skill's own node name can never match, so a repo that declares
@@ -105,7 +118,7 @@ func extractSkills(root string, ents []candywalk.Entity) (int, error) {
 		// would not be the file the reader reads.
 		declared, ok := trees[s.Owner]
 		if !ok {
-			declared = []string{agentsSkillsDir}
+			declared = []string{candywalk.AgentsSkillsDir}
 		}
 		dir := filepath.Join(root, declared[0], name)
 		if err := os.MkdirAll(filepath.Join(dir, "references"), 0o755); err != nil {
@@ -123,7 +136,15 @@ func extractSkills(root string, ents []candywalk.Entity) (int, error) {
 		// body is deleted, silently publishes that newline into the corpus. Write the separator
 		// ONCE and let the body be exactly the body — a body that itself starts with blank lines
 		// round-trips too, because nothing here trims.
-		entry := skillFrontmatter(name, s.Description) + s.Content
+		//
+		// The TRAILING byte is the same discipline one rule over, and it is normalised here for the
+		// same reason the reference writer two lines below normalises it: the emitter writes
+		// `TrimSuffix(content, "\n") + "\n"`, so an authored file that merely echoes the entity's
+		// content differs from the projection its own repo publishes whenever that content arrives
+		// without a trailing newline — one byte, at EOF, on every skill of such a repo
+		// (plugin-marketplace#33, measured 7 of 7 on pod-charly-versa). A hand-owned markdown file
+		// also ends with a newline, which is what makes the two writers agree by construction.
+		entry := skillFrontmatter(name, s.Description) + strings.TrimSuffix(s.Content, "\n") + "\n"
 		if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(entry), 0o644); err != nil {
 			return moved, fmt.Errorf("skill %q: %w", name, err)
 		}
@@ -137,6 +158,28 @@ func extractSkills(root string, ents []candywalk.Entity) (int, error) {
 		moved++
 	}
 	return moved, nil
+}
+
+// writeAgentFile writes one `agent`-type node's body to the file its repository owns, at
+// <root>/.agents/agents/<name>.md.
+//
+// The SHAPE is what separates it from the skill writer: ONE markdown file directly under the agents
+// tree — no entry directory, no references/ directory, and no `skills:` lookup, because a `skills:`
+// list is a list of SKILL trees. Everything else is the skill writer's contract, byte for byte: the
+// emitter's two-key frontmatter, no generator marker (this file is hand-owned from here on), and the
+// emitter's EOF rule `TrimSuffix(content, "\n") + "\n"` — which is what makes the authored file
+// identical to the projection the same repo publishes, with no one-byte difference at EOF
+// (plugin-marketplace#33).
+func writeAgentFile(root, name string, s spec.Skill) error {
+	dir := filepath.Join(root, candywalk.AgentsAgentsDir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("agent %q: %w", name, err)
+	}
+	entry := skillFrontmatter(name, s.Description) + strings.TrimSuffix(s.Content, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte(entry), 0o644); err != nil {
+		return fmt.Errorf("agent %q: %w", name, err)
+	}
+	return nil
 }
 
 // extractCmd moves in-line bodies into the files their repositories own. It takes --root and no

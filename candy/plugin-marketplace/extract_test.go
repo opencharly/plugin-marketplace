@@ -3,6 +3,7 @@ package marketplace
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -117,11 +118,14 @@ func TestExtract_StopsMovingOnceTheBodyIsGone(t *testing.T) {
 	}
 }
 
-// skillFixture builds one skill node in the REAL authored shape — a node keyed by its own name
-// whose single key is `skill:` — around an arbitrary body. The body is emitted as a YAML literal
-// block scalar; the test DECODES the fixture back and asserts it is byte-identical to the body it
-// asked for, so a YAML subtlety can never make the comparison vacuous.
-func skillFixture(node, body string) string {
+// skillFixture builds one skill node in the REAL authored shape — a node keyed by its own name whose
+// single key is `skill:` — around an arbitrary body. The body is emitted as a YAML literal block
+// scalar with the given indicator: `|` (clip) keeps a trailing newline on the decoded value, `|-`
+// (strip) removes it. The stripped form is not a corner case — it is how a `content:` reaches the
+// parser with NO trailing newline, which is the input plugin-marketplace#33 was measured on (7 of 7
+// skills of pod-charly-versa). The test DECODES the fixture back and asserts it is byte-identical to
+// the body it asked for, so a YAML subtlety can never make the comparison vacuous.
+func skillFixture(node, indicator, body string) string {
 	indented := "            " + strings.ReplaceAll(body, "\n", "\n            ")
 	return "demo:\n" +
 		"    candy:\n" +
@@ -139,12 +143,67 @@ func skillFixture(node, body string) string {
 		"        owner: demo\n" +
 		"        description: |-\n" +
 		"            branch-per-change landing.\n" +
-		"        content: |\n" +
+		"        content: " + indicator + "\n" +
 		indented + "\n" +
 		"        references:\n" +
 		"            - name: validator-and-calver\n" +
 		"              content: |\n" +
 		"                The tag is cut at merge.\n"
+}
+
+// emissionFor returns the emitter's COMPLETE emission for one node — path -> bytes, the artifact
+// the corpus would carry.
+func emissionFor(t *testing.T, s spec.Skill) emissions {
+	t.Helper()
+	em := emissions{}
+	emitSkills(em, []family{{Name: s.Family, Skills: []spec.Skill{s}}})
+	if len(em) == 0 {
+		t.Fatalf("the emitter produced nothing for %q — it has a body", s.Name)
+	}
+	return em
+}
+
+// entryOf picks the ONE entry file out of an emission: a skill's `SKILL.md` or an agent's
+// `<name>.md`, never a `references/` split file. The test does NOT re-derive the emitter's path
+// rule here — it reads back what the emitter actually produced, so a path change is a failure of
+// the assertion below rather than something this helper quietly agrees with.
+func entryOf(t *testing.T, em emissions) (path, body string) {
+	t.Helper()
+	for p, b := range em {
+		if !strings.HasSuffix(p, ".md") || strings.Contains(p, "/references/") {
+			continue
+		}
+		if path != "" {
+			t.Fatalf("one node's emission held two entry files: %s and %s", path, p)
+		}
+		path, body = p, string(b)
+	}
+	if path == "" {
+		t.Fatalf("the emission holds no entry file: %v", sortedKeys(em))
+	}
+	return path, body
+}
+
+// authoredFromProjection is the claim a repo's move rests on, and the assertion that catches a
+// one-byte EOF defect: what `extract` writes must be EXACTLY the projection the same repo publishes
+// with the generator's banner removed. Nothing here re-states the emitter's byte rule — both sides
+// come from the real emitter (`emitSkills`) and the real banner constant.
+func authoredFromProjection(t *testing.T, em emissions) string {
+	t.Helper()
+	_, corpus := entryOf(t, em)
+	if !strings.Contains(corpus, generatedHeaderBlock) {
+		t.Fatalf("the projection carries no generator banner — a banner-stripped comparison would be vacuous:\n%s", corpus)
+	}
+	return strings.Replace(corpus, generatedHeaderBlock, "", 1)
+}
+
+func sortedKeys(em emissions) []string {
+	out := make([]string, 0, len(em))
+	for k := range em {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // decodeOneSkill reads a fixture back through the SAME file-level reader the walker uses, so the
@@ -189,15 +248,21 @@ func decodeOneSkill(t *testing.T, root, node string) spec.Skill {
 // a blank line.
 func TestExtract_WritesTheBodyTheReaderReadsBack(t *testing.T) {
 	cases := []struct {
-		name string
-		body string
+		name      string
+		indicator string
+		body      string
 	}{
-		{"leads-with-a-title", "# git-workflow\n\nBody.\n"},
-		{"leads-with-blank-lines", "\n\n# git-workflow\n\nBody.\n"},
+		{"leads-with-a-title", "|", "# git-workflow\n\nBody.\n"},
+		{"leads-with-blank-lines", "|", "\n\n# git-workflow\n\nBody.\n"},
+		// The EOF case of plugin-marketplace#33: a `content:` the YAML parser hands over WITHOUT a
+		// trailing newline. Every presence-shaped assertion passes on it — a prefix, a Contains, even
+		// a reader round trip of the BODY — and only the byte comparison against the published
+		// projection fails.
+		{"no-trailing-newline", "|-", "# git-workflow\n\nBody."},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := writeExtractFixture(t, skillFixture(tc.name, tc.body))
+			root := writeExtractFixture(t, skillFixture(tc.name, tc.indicator, tc.body))
 			want := decodeOneSkill(t, root, tc.name)
 			if want.Content != tc.body {
 				t.Fatalf("fixture: the node decoded to %q, want %q — the fixture cannot carry this case", want.Content, tc.body)
@@ -207,15 +272,15 @@ func TestExtract_WritesTheBodyTheReaderReadsBack(t *testing.T) {
 				t.Fatalf("extract: %v", err)
 			}
 
-			sf, err := candywalk.ReadSkillFile(filepath.Join(root, agentsSkillsDir), tc.name)
+			sf, err := candywalk.ReadSkillFile(filepath.Join(root, candywalk.AgentsSkillsDir), tc.name)
 			if err != nil {
 				t.Fatalf("read the extracted file back: %v", err)
 			}
 			if sf == nil {
 				t.Fatalf("extract wrote no file for %q", tc.name)
 			}
-			if sf.Content != want.Content {
-				t.Errorf("the reader reads a different body than the entity held:\n  entity %q\n  file   %q", want.Content, sf.Content)
+			if wantBody := strings.TrimSuffix(want.Content, "\n") + "\n"; sf.Content != wantBody {
+				t.Errorf("the reader reads a different body than the entity held:\n  entity EOF-normalised %q\n  file                  %q", wantBody, sf.Content)
 			}
 			if sf.Description != want.Description {
 				t.Errorf("description: entity %q, file %q", want.Description, sf.Description)
@@ -238,6 +303,20 @@ func TestExtract_WritesTheBodyTheReaderReadsBack(t *testing.T) {
 				if got != r.Content {
 					t.Errorf("reference %q: entity %q, file %q", r.Name, r.Content, got)
 				}
+			}
+
+			// AND THE BYTE-EXACTNESS CLAIM, which no reading of the body can make: the hand-owned
+			// file must equal the projection this same repo publishes with the generator's banner
+			// removed — at every byte, EOF included. This is the assertion plugin-marketplace#33
+			// asked for and the one that fails on the pre-fix writer, which echoed `s.Content`
+			// instead of normalising the trailing byte the way the emitter and the reference writer
+			// both do.
+			entry, err := os.ReadFile(filepath.Join(root, candywalk.AgentsSkillsDir, tc.name, "SKILL.md"))
+			if err != nil {
+				t.Fatalf("the extracted skill file is unreadable: %v", err)
+			}
+			if projected := authoredFromProjection(t, emissionFor(t, want)); string(entry) != projected {
+				t.Errorf("the authored file is not the published projection minus the banner:\n  file       %q\n  projection %q", string(entry), projected)
 			}
 		})
 	}
