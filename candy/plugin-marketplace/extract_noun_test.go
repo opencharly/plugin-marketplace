@@ -52,9 +52,13 @@ func TestExtract_ReportsEachArtifactClassSeparately(t *testing.T) {
 	}
 }
 
-// TestExtract_ReportNamesNoClassItDidNotWrite is the paired negative: an empty corpus must report
-// zeros for BOTH classes rather than falling silent or claiming work. Without this, a message that
-// hard-coded "+ 0 agent(s)" would satisfy the test above while lying about a mixed corpus.
+// TestExtract_ReportNamesNoClassItDidNotWrite is the paired negative, and it uses the OPPOSITE
+// composition to the test above: a corpus whose only node is a SKILL, so the skill counter must read
+// 1 and the agent counter 0. (It is not an empty corpus: a corpus with no nodes at all would exercise
+// neither arm, and would leave a hard-coded "+ 0 agent(s)" looking correct.)
+//
+// Without this, a message that printed the skill count twice — or hard-coded one of the two — would
+// satisfy the all-agent assertion above while lying about every mixed corpus.
 func TestExtract_ReportNamesNoClassItDidNotWrite(t *testing.T) {
 	// A corpus whose only node is a skill: the opposite composition to the test above.
 	root := writeExtractFixture(t, skillFixtureForReport("local-keeper", "A local fixture skill.\n"))
