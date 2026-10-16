@@ -34,7 +34,7 @@ func extract(root string) error {
 	if err != nil {
 		return fmt.Errorf("discover repo roots: %w", err)
 	}
-	moved := 0
+	skills, agents := 0, 0
 	for _, r := range roots {
 		manifests, err := repoManifests(r.Dir)
 		if err != nil {
@@ -45,14 +45,15 @@ func extract(root string) error {
 			if err != nil {
 				return fmt.Errorf("read %s: %w", rel, err)
 			}
-			n, err := extractSkills(root, ents)
+			sk, ag, err := extractSkills(root, ents)
 			if err != nil {
 				return err
 			}
-			moved += n
+			skills += sk
+			agents += ag
 		}
 	}
-	fmt.Fprintf(os.Stderr, "marketplace extract: %d skill(s) written under %s\n", moved, root)
+	fmt.Fprintf(os.Stderr, "marketplace extract: %d skill(s) + %d agent(s) written under %s\n", skills, agents, root)
 	return nil
 }
 
@@ -76,21 +77,21 @@ func repoManifests(dir string) ([]string, error) {
 }
 
 // extractSkills moves every in-line skill body found in one manifest out to its file, and reports
-// how many it moved. A skill with no in-line content is already file-sourced and is left alone,
+// how many of each it wrote. A skill with no in-line content is already file-sourced and is left alone,
 // which is what makes a second run a no-op.
-func extractSkills(root string, ents []candywalk.Entity) (int, error) {
+func extractSkills(root string, ents []candywalk.Entity) (skills, agents int, err error) {
 	trees, err := skillTrees(ents)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	moved := 0
+	skills, agents = 0, 0
 	for _, e := range ents {
 		if e.Kind != "skill" {
 			continue
 		}
 		var s spec.Skill
 		if err := e.Value.Decode(&s); err != nil {
-			return moved, fmt.Errorf("skill %q: decode: %w", e.Name, err)
+			return skills, agents, fmt.Errorf("skill %q: decode: %w", e.Name, err)
 		}
 		if s.Content == "" {
 			continue
@@ -105,9 +106,9 @@ func extractSkills(root string, ents []candywalk.Entity) (int, error) {
 		// branched BEFORE the tree lookup, not through it.
 		if s.Type == "agent" {
 			if err := writeAgentFile(root, name, s); err != nil {
-				return moved, err
+				return skills, agents, err
 			}
-			moved++
+			agents++
 			continue
 		}
 		// The tree comes from the OWNING CANDY's declaration, keyed exactly as readkinds.go keys it
@@ -122,7 +123,7 @@ func extractSkills(root string, ents []candywalk.Entity) (int, error) {
 		}
 		dir := filepath.Join(root, declared[0], name)
 		if err := os.MkdirAll(filepath.Join(dir, "references"), 0o755); err != nil {
-			return moved, fmt.Errorf("skill %q: %w", name, err)
+			return skills, agents, fmt.Errorf("skill %q: %w", name, err)
 		}
 		// The AUTHORED shape: the emitter's two-key frontmatter, then the body — and deliberately
 		// WITHOUT the generator's marker, because the marker is what marks a file as generated and
@@ -146,18 +147,18 @@ func extractSkills(root string, ents []candywalk.Entity) (int, error) {
 		// also ends with a newline, which is what makes the two writers agree by construction.
 		entry := skillFrontmatter(name, s.Description) + strings.TrimSuffix(s.Content, "\n") + "\n"
 		if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(entry), 0o644); err != nil {
-			return moved, fmt.Errorf("skill %q: %w", name, err)
+			return skills, agents, fmt.Errorf("skill %q: %w", name, err)
 		}
 		for _, ref := range s.References {
 			// references/ files carry NO frontmatter, by contract (see emit_skills.go).
 			body := strings.TrimSuffix(ref.Content, "\n") + "\n"
 			if err := os.WriteFile(filepath.Join(dir, "references", ref.Name+".md"), []byte(body), 0o644); err != nil {
-				return moved, fmt.Errorf("skill %q reference %q: %w", name, ref.Name, err)
+				return skills, agents, fmt.Errorf("skill %q reference %q: %w", name, ref.Name, err)
 			}
 		}
-		moved++
+		skills++
 	}
-	return moved, nil
+	return skills, agents, nil
 }
 
 // writeAgentFile writes one `agent`-type node's body to the file its repository owns, at
