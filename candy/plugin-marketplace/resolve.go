@@ -81,15 +81,52 @@ func preferEntity(incumbent, candidate candywalk.Entity) bool {
 	return candidate.SourceRoot > incumbent.SourceRoot
 }
 
-// dedupeEntities collapses entities that share a (Kind, Name) to one winner each, applying
+// entityFamily reports the FAMILY an entity's body declares, for the kinds that have one.
+//
+// The family is part of a skill's identity, not metadata about it: the corpus is per-family
+// (`<family>/skills/<name>/SKILL.md`) and a skill is addressed `/charly-<family>:<skill>`, so two
+// families declaring one node name are two different skills and both must be published. Keying
+// the dedupe on (Kind, Name) alone collapsed them and let tag order decide the survivor —
+// measured on the live closure, `layer-crabbox` (tools) and `plugin-crabbox` (check) both declare
+// a `crabbox` skill, and a refresh that advanced both tags swapped the published skill and
+// dropped the losing entity's dispatcher row with it (opencharly/plugin-marketplace#20, observed
+// on opencharly/marketplace#490).
+//
+// Only `skill` declares one (spec#247/spec.Skill): a `hook` has no family field, and the walker's
+// entity is deliberately generic — the family is read here rather than added to candywalk.Entity,
+// which is a shared kit and must not learn a kind word (the boundary law, plugin AGENTS.md).
+//
+// A decode failure returns "" (no family) rather than an error: the same body is decoded in FULL
+// by readKinds immediately after, which hard-errors on a malformed skill, so a bad value cannot
+// pass silently — it only cannot pick the dedupe winner, and the run fails loudly a moment later.
+func entityFamily(e candywalk.Entity) string {
+	if e.Kind != "skill" || e.Value.Kind == 0 {
+		return ""
+	}
+	var v struct {
+		Family string `yaml:"family"`
+	}
+	if err := e.Value.Decode(&v); err != nil {
+		return ""
+	}
+	return v.Family
+}
+
+// dedupeEntities collapses entities that share a (Kind, FAMILY, Name) to one winner each, applying
 // preferEntity. The returned slice is in a stable order so downstream emission cannot vary
 // between runs.
+//
+// The family is in the key because it is what makes the name unambiguous: with (Kind, Name) alone,
+// two families declaring one name collided and the higher tag won, which silently removed a
+// published skill (and its dispatcher row) from the corpus. Two entities that share all three are
+// the SAME skill arriving from two sources — the case this file exists for — and still resolve by
+// preferEntity.
 func dedupeEntities(ents []candywalk.Entity) []candywalk.Entity {
-	type key struct{ kind, name string }
+	type key struct{ kind, family, name string }
 	best := map[key]candywalk.Entity{}
 	order := []key{}
 	for _, e := range ents {
-		k := key{e.Kind, e.Name}
+		k := key{e.Kind, entityFamily(e), e.Name}
 		cur, seen := best[k]
 		if !seen {
 			best[k] = e

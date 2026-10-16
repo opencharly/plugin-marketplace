@@ -14,11 +14,17 @@ import (
 // spec.Marketplace — SDD, no hand-transcribed wire types); the load path already validated every
 // body against the kind's served schema, so a decode here is expected to succeed.
 
-// kindSet is everything the generator reads: the skill/hook entities (keyed by node name) and
-// the single marketplace entity.
+// kindSet is everything the generator reads: the skill/hook entities and the single marketplace
+// entity.
 type kindSet struct {
-	Skills      map[string]spec.Skill // node name → skill (node names are document-unique; skills are deduped by body name in the model)
-	Hooks       map[string]spec.Hook  // node name → hook
+	// Skills is a SLICE, not a map keyed by node name. Once the family joined the dedupe key
+	// (resolve.go), two families may legitimately publish a skill carrying the same node name —
+	// the corpus is per-family, and a skill is addressed `/charly-<family>:<skill>` — so a map
+	// keyed by node name would silently drop one of them HERE, re-creating exactly the pruning
+	// the family-aware key exists to stop. The model sorts each family's skills by name, so no
+	// key is needed downstream.
+	Skills      []spec.Skill
+	Hooks       map[string]spec.Hook // node name → hook (hooks declare no family; node names are document-unique)
 	Marketplace *spec.Marketplace
 }
 
@@ -51,7 +57,7 @@ func readKinds(root string) (*kindSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	ks := &kindSet{Skills: map[string]spec.Skill{}, Hooks: map[string]spec.Hook{}}
+	ks := &kindSet{Hooks: map[string]spec.Hook{}}
 	for _, e := range ents {
 		switch e.Kind {
 		case "skill":
@@ -70,7 +76,7 @@ func readKinds(root string) (*kindSet, error) {
 			// this is the single funnel every skill enters the model through, so no source form can
 			// escape it (see canonicalizeReferences in skillfile.go).
 			canonicalizeReferences(s.References)
-			ks.Skills[e.Name] = s
+			ks.Skills = append(ks.Skills, s)
 		case "hook":
 			var h spec.Hook
 			if err := e.Value.Decode(&h); err != nil {
