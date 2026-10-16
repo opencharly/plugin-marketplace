@@ -9,13 +9,15 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// skillfile.go — the `.agents/skills` FILE source, GENERATOR side (the relocation's leg L4).
+// skillfile.go — the authored FILE sources, GENERATOR side (the relocation's leg L4).
 //
 // A skill's body may live in the repository that owns it, at <tree>/<name>/SKILL.md plus
 // references/<stem>.md, with the `skill:` node left carrying only the ROUTING metadata the
-// consumers read. The schema half landed in spec#247 (optional `name`/`description`/`content`,
-// plus `#Candy.skills`); the reader landed in sdk (`candywalk.ReadSkillFile`/`ReadSkillTree`);
-// this file is the consumer that makes the corpus read from those files.
+// consumers read. An `agent`-type node is the same deal at a different path —
+// .agents/agents/<name>.md, ONE file, no references/ half — because a sub-agent definition is not a
+// skill. The schema half landed in spec#247 (optional `name`/`description`/`content`, plus
+// `#Candy.skills`); the readers live in sdk (`candywalk.ReadSkillFile`/`ReadSkillTree`/
+// `ReadAgentFile`); this file is the consumer that makes the corpus read from those files.
 //
 // WHERE THE READ GOES, and why it is not a detail (F13): readkinds.go runs `dedupeEntities`
 // BEFORE it decodes anything, so by the time a skill reaches the model, the winning entity — and
@@ -23,13 +25,15 @@ import (
 // inside that decode loop, per entity, and nothing in this file may re-decide it. Read it anywhere
 // earlier, or from the generator's own root, and 293 of the 355 identities can publish a body
 // `preferEntity` did not choose.
-
-// agentsSkillsDir is the Agent-Skills standard location: what a candy's `skills:` list means when
-// it declares none.
-const agentsSkillsDir = ".agents/skills"
+//
+// The tree constants are READ FROM THE KIT, never mirrored here: one path fact, one definition
+// (`candywalk.AgentsSkillsDir` / `candywalk.AgentsAgentsDir`).
 
 // skillTrees maps each candy's node name to the trees its skills are read from: the candy's
 // `skills:` list, or the Agent-Skills standard when it declares none.
+//
+// A candy's `skills:` list is a list of SKILL trees and governs no `agent`-type node — an agent's
+// path is fixed (<candywalk.AgentsAgentsDir>), which is what makes a mixed repo legal.
 //
 // The declaration is visible to the generator because `candywalk.ReadEntityFile` emits one Entity
 // per kind discriminator — `candy` included — so a candy arrives with its `skills:` list attached;
@@ -48,7 +52,7 @@ func skillTrees(ents []candywalk.Entity) (map[string][]string, error) {
 			return nil, fmt.Errorf("candy %q: decode: %w", e.Name, err)
 		}
 		if len(c.Skills) == 0 {
-			trees[e.Name] = []string{agentsSkillsDir}
+			trees[e.Name] = []string{candywalk.AgentsSkillsDir}
 			continue
 		}
 		// Copy: the decoded slice is the caller's only witness of the declaration, and the
@@ -58,20 +62,29 @@ func skillTrees(ents []candywalk.Entity) (map[string][]string, error) {
 	return trees, nil
 }
 
-// fillSkillFromFile completes one WINNING skill entity from the file its repository owns.
+// fillSkillFromFile completes one WINNING `skill:`-kind entity from the file its repository owns.
+// The KIND carries two artifact classes, selected by the node's own `type:`, and this function is
+// the single funnel both of them enter the model through:
+//
+//   - `skill` (the default) — <tree>/<name>/SKILL.md plus references/<stem>.md, where <tree> is the
+//     owning candy's `skills:` list;
+//   - `agent` — .agents/agents/<name>.md, ONE file, and `skills:` does not govern it (D8): a
+//     sub-agent definition is not a skill.
 //
 // node is the entity's node name; sourceRoot the tree of the entity dedupeEntities chose (F13:
 // nothing here may re-decide which tree is read); root is the generator's root, used only when the
-// entity is LOCAL and therefore carries no SourceRoot; trees are the trees its owning candy
+// entity is LOCAL and therefore carries no SourceRoot; trees are the SKILL trees its owning candy
 // declares.
 //
-// Three rules are LOUD on purpose, because silence here loses published pages:
+// Three rules are LOUD on purpose, because silence here loses published pages — and they are the
+// SAME three for both classes, since a sub-agent that vanishes is the same failure as a skill that
+// vanishes:
 //   - the file wins when it exists — that is what makes a per-repo move atomic, since a repo with
 //     files has moved and a repo with inline bodies has not;
 //   - an inline body that DIFFERS from the file is an error naming both: two sources of truth for
 //     one published page is the ambiguity this relocation exists to remove;
 //   - neither an inline body nor a file is an error — the one failure that would quietly drop a
-//     published skill from the corpus.
+//     published skill or sub-agent from the corpus.
 func fillSkillFromFile(s *spec.Skill, node, sourceRoot, root string, trees []string) error {
 	name := s.Name
 	if name == "" {
@@ -81,6 +94,9 @@ func fillSkillFromFile(s *spec.Skill, node, sourceRoot, root string, trees []str
 	base := sourceRoot
 	if base == "" {
 		base = root
+	}
+	if s.Type == "agent" {
+		return fillAgentFromFile(s, name, base)
 	}
 	var sf *candywalk.SkillFile
 	for _, t := range trees {
@@ -119,6 +135,40 @@ func fillSkillFromFile(s *spec.Skill, node, sourceRoot, root string, trees []str
 		}
 		s.References = refs
 	}
+	return nil
+}
+
+// fillAgentFromFile completes one WINNING `agent`-type entity from the file its repository owns:
+// .agents/agents/<name>.md, ONE file directly under the agents tree.
+//
+// It is a separate branch rather than a path parameter to the skill read, because the two shapes
+// differ in more than their path: an agent has no entry DIRECTORY (so there is no `trees` lookup to
+// walk) and no references/ half (the emitter publishes none, so there is nothing to reconcile
+// there). `skills:` deliberately plays no part — a list of SKILL trees does not govern a sub-agent
+// definition, which is what makes a mixed repo legal.
+//
+// The three loud rules are the skill branch's, unchanged, and for the same reason: an agent body
+// that goes missing is a published sub-agent silently subtracted from the corpus.
+func fillAgentFromFile(s *spec.Skill, name, base string) error {
+	af, err := candywalk.ReadAgentFile(filepath.Join(base, candywalk.AgentsAgentsDir), name)
+	if err != nil {
+		return fmt.Errorf("agent %q: %w", name, err)
+	}
+	if af == nil {
+		if s.Content == "" {
+			return fmt.Errorf("agent %q: no body — neither an inline `content:` nor %s/%s.md", name, candywalk.AgentsAgentsDir, name)
+		}
+		// The transitional in-line form, still valid until the relocation's own final leg.
+		return nil
+	}
+	if s.Content != "" && s.Content != af.Content {
+		return fmt.Errorf("agent %q: the node's inline `content:` and its file disagree — delete the inline body and keep the file", name)
+	}
+	if s.Description != "" && s.Description != af.Description {
+		return fmt.Errorf("agent %q: the node's inline `description:` and its file's frontmatter disagree", name)
+	}
+	s.Description = af.Description
+	s.Content = af.Content
 	return nil
 }
 
