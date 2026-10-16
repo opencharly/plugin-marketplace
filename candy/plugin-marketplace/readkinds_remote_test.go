@@ -46,17 +46,18 @@ func TestReadKinds_ResolvesMovedCandySkill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readKinds: %v", err)
 	}
-	// The skill map is keyed by the node name (e.g. ripgrep-skill); the skill's own name field
-	// is the human name. Assert the moved candy's skill entity is present by either key and
-	// that its family is tools (the skill: entity from the fetched layer-ripgrep repo).
+	// Skills is a slice since the family joined the dedupe key (resolve.go), because two families
+	// may now publish a skill with the same node name — keying a map by node name would drop one
+	// of them here. Assert the moved candy's skill entity is present by its own name, and that its
+	// family is tools (the skill: entity from the fetched layer-ripgrep repo).
 	found := false
-	for name, s := range ks.Skills {
-		if s.Name == "ripgrep" || name == "ripgrep" {
+	for _, s := range ks.Skills {
+		if s.Name == "ripgrep" {
 			found = true
 			if s.Family != "tools" {
 				t.Fatalf("ripgrep skill family = %q, want tools", s.Family)
 			}
-			t.Logf("readKinds resolved moved candy skill (node=%s name=%s family=tools) from the remote walk", name, s.Name)
+			t.Logf("readKinds resolved moved candy skill (name=%s family=tools) from the remote walk", s.Name)
 		}
 	}
 	if !found {

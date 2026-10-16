@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/candywalk"
+	"gopkg.in/yaml.v3"
 )
 
 const cacheBase = "/home/u/.cache/charly/repos/github.com/opencharly/"
@@ -117,5 +118,53 @@ func TestDedupeEntities_KindsAreSeparate(t *testing.T) {
 
 	if got := dedupeEntities([]candywalk.Entity{a, b}); len(got) != 2 {
 		t.Fatalf("got %d entities, want 2 — a skill and a hook sharing a name are distinct", len(got))
+	}
+}
+
+// skillEntity builds a `skill:` entity whose body declares a family, the shape candywalk yields
+// (Value is the kind value body, so a mapping node carrying `name:`/`family:`).
+func skillEntity(name, family, sourceRoot string) candywalk.Entity {
+	var doc yaml.Node
+	body := "name: " + name + "\nfamily: " + family + "\ndescription: a skill\n"
+	if err := yaml.Unmarshal([]byte(body), &doc); err != nil {
+		panic(err)
+	}
+	return candywalk.Entity{Name: name, Kind: "skill", Value: *doc.Content[0], SourceRoot: sourceRoot}
+}
+
+// TestDedupeEntities_FamiliesAreSeparate — the same NAME in two FAMILIES is two skills, and the
+// tag rule still resolves the SAME one arriving twice.
+//
+// The family is what makes a skill name unambiguous: the corpus is per-family
+// (`<family>/skills/<name>/SKILL.md`) and a skill is addressed `/charly-<family>:<skill>`. Keying
+// the dedupe on (Kind, Name) alone let tag order decide which of two different skills survived,
+// and the loser's file and dispatcher row were pruned from the corpus. Measured live:
+// `layer-crabbox` (family tools, v2026.288.2114) and `plugin-crabbox` (family check,
+// v2026.288.1538) both declare a `crabbox` skill, and the refresh that advanced both tags
+// swapped the published one (opencharly/plugin-marketplace#20, observed on
+// opencharly/marketplace#490). Both must survive, because both are real skills in their own
+// family.
+func TestDedupeEntities_FamiliesAreSeparate(t *testing.T) {
+	tools := skillEntity("crabbox", "tools", cacheBase+"layer-crabbox@v2026.288.2114")
+	check := skillEntity("crabbox", "check", cacheBase+"plugin-crabbox@v2026.288.1538")
+
+	got := dedupeEntities([]candywalk.Entity{tools, check})
+	if len(got) != 2 {
+		t.Fatalf("got %d entities, want 2 — the same name in two families is two skills, and dropping one publishes the wrong one by tag order", len(got))
+	}
+	families := map[string]bool{}
+	for _, e := range got {
+		families[entityFamily(e)] = true
+	}
+	if !families["tools"] || !families["check"] {
+		t.Fatalf("kept families %v, want both tools and check", families)
+	}
+	// The tag rule is untouched by the new key: the SAME skill (kind, family, name) arriving from
+	// two sources still collapses to the higher tag, which is the case this file exists for.
+	older := skillEntity("crabbox", "tools", cacheBase+"layer-crabbox@v2026.274.0609")
+	if got := dedupeEntities([]candywalk.Entity{older, tools}); len(got) != 1 {
+		t.Fatalf("got %d entities, want 1 — one skill from two sources is still one entity", len(got))
+	} else if got[0].SourceRoot != tools.SourceRoot {
+		t.Fatalf("winner = %q, want the higher tag %q", got[0].SourceRoot, tools.SourceRoot)
 	}
 }
