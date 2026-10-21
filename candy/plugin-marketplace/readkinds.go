@@ -48,8 +48,14 @@ func readKinds(root string) (*kindSet, error) {
 	// repo resolved at two tags, because the refs list pins it directly while something in
 	// the transitive closure pins an older tag. Assigning into the map below is
 	// last-write-wins over an unordered collection, so resolve the winner explicitly first.
-	// See resolve.go for the rule and the measurements behind it.
-	ents = dedupeEntities(ents)
+	// See resolve.go for the rule and the measurements behind it. The AUTHORITY the winner is
+	// chosen by — the generator's own roots, and the refs those roots declare — is derived from
+	// the RAW collection: it is the dedupe's input, so it cannot be read off its output.
+	auth, err := directPinAuthority(roots, ents)
+	if err != nil {
+		return nil, err
+	}
+	ents = dedupeEntities(ents, auth)
 	// The SKILL trees each skill's files are read from, per owning candy (spec#247's `skills:`,
 	// default `.agents/skills`). Built from the SAME deduped slice, so a file read can never disagree
 	// with the entity the dedupe chose — see skillfile.go. An `agent`-type node is NOT in this map's
