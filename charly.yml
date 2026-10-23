@@ -7,7 +7,8 @@
 #
 # Declaring discover: is the whole fix: the candy is scanned, the CUE schema gate
 # applies, and the STOCK `charly box validate` step starts working with no workflow
-# change. This file declares no entities of its own - it only tells charly where to look.
+# change. Besides telling charly where to look, this file's ONLY own declarations are
+# the corpus R10 bed below (`marketplace-app` + `check-marketplace`).
 defaults:
     platform:
         - linux/amd64

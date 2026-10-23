@@ -179,3 +179,26 @@ plugin-marketplace:
                 test -f /srv/marketplace/candy/charly-marketplace/charly.yml &&
                 test -f /srv/marketplace/DISPATCHER.md &&
                 echo candy/charly-marketplace/charly.yml && echo DISPATCHER.md
+
+# The `marketplace` skill — ROUTING ONLY. The prose is the FILE
+# `.agents/skills/marketplace/SKILL.md` at this repo's root, copied byte-identically
+# (sha256 7d4d26763498cd228a1ad8d5825c821b794aa34e4cda0ca542ad011a572aa94b) from
+# `opencharly/layer-charly-internals` at its `main`; the node carries no
+# `description:`/`content:`, because an in-line body that disagrees with its file is a
+# hard error in the marketplace generator.
+#
+# The body resolves against the OWNING CANDY's repo root (sdk/deploykit's
+# `candyRepoRoot`), which is why it sits at `.agents/skills/` here and not inside
+# `candy/plugin-marketplace/`. The destination is measured, never chosen: corpus
+# generation, the refs list, the drift gate and the refresh PRs are THIS plugin's
+# own surface (opencharly/opencharly#611).
+#
+# `family: internals` is carried over UNCHANGED so every
+# `/charly-internals:marketplace` address survives the move.
+marketplace-skill:
+    skill:
+        name: marketplace
+        family: internals
+        owner: plugin-marketplace
+        triggers:
+            - "Marketplace / skill-corpus generation — `charly marketplace generate`, the refs list (candy/charly-marketplace/charly.yml), the drift gate, the daily refresh PRs, per-harness vendoring, or 'my skill is stale'"

@@ -10,7 +10,12 @@ and the `check-marketplace` disposable bed.
 Canonical files:
 
 - `candy/plugin-marketplace/charly.yml` — the `plugin-marketplace:` candy entity
-  (`plugin:` block, `var:` pins, `plan:` checks).
+  (`plugin:` block, `var:` pins, `plan:` checks) and the routing-only
+  `marketplace-skill:` `skill:` node it owns.
+- `.agents/skills/marketplace/SKILL.md` — the `marketplace` skill's PROSE (the
+  node above carries no body). It sits at the repo root because a skill body
+  resolves against the owning candy's REPO ROOT, and its destination here is
+  measured: corpus generation, the refs list and the drift gate are this plugin.
 - `candy/plugin-marketplace/` — the Go source: `plugin.go`, `command.go`,
   `generate.go`, `emit*.go`, `model.go`, `prune.go`, `readkinds.go`,
   `resolve.go`, `schema/marketplace.cue`, `cmd/serve/main.go`.
