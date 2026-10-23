@@ -221,13 +221,17 @@ func TestExtract_AgentNodeWithNoBodyIsLeftAlone(t *testing.T) {
 	}
 }
 
-// TestFillAgentFromFile_IsLoud — the fail-loud contract of the skill branch, carried to the agent
-// branch. Silence in any of these is a published sub-agent subtracted from the corpus with no error,
-// which is the failure class this whole relocation exists to remove.
-func TestFillAgentFromFile_IsLoud(t *testing.T) {
+// TestFillSkillFromFile_AgentShapeIsLoud — the fail-loud contract of the skill branch, carried to
+// the agent shape. Silence in any of these is a published sub-agent subtracted from the corpus with
+// no error, which is the failure class this whole relocation exists to remove.
+//
+// It drives the ONE funnel (`fillSkillFromFile`) rather than a per-shape helper: the agent shape no
+// longer has its own branch, because WHERE a body lives is candywalk.ReadNodeBody's answer
+// (opencharly/sdk#456) and only the reconciliation is the generator's.
+func TestFillSkillFromFile_AgentShapeIsLoud(t *testing.T) {
 	t.Run("neither-a-file-nor-an-inline-body", func(t *testing.T) {
 		s := spec.Skill{Name: "ghost", Type: "agent"}
-		err := fillAgentFromFile(&s, "ghost", t.TempDir())
+		err := fillSkillFromFile(&s, "ghost", t.TempDir(), "", nil)
 		if err == nil {
 			t.Fatal("an agent node with no body anywhere was accepted — the corpus would publish nothing")
 		}
@@ -242,7 +246,7 @@ func TestFillAgentFromFile_IsLoud(t *testing.T) {
 		root := t.TempDir()
 		writeAgentFixture(t, root, "pr-validator", "# From the file.\n")
 		s := spec.Skill{Name: "pr-validator", Type: "agent", Content: "# From the node.\n"}
-		if err := fillAgentFromFile(&s, "pr-validator", root); err == nil {
+		if err := fillSkillFromFile(&s, "pr-validator", root, "", nil); err == nil {
 			t.Fatal("two sources of truth for one published agent were accepted")
 		}
 		if s.Content != "# From the node.\n" {
@@ -254,7 +258,7 @@ func TestFillAgentFromFile_IsLoud(t *testing.T) {
 		root := t.TempDir()
 		writeAgentFixture(t, root, "pr-validator", "# From the file.\n")
 		s := spec.Skill{Name: "pr-validator", Type: "agent", Description: "something else"}
-		if err := fillAgentFromFile(&s, "pr-validator", root); err == nil {
+		if err := fillSkillFromFile(&s, "pr-validator", root, "", nil); err == nil {
 			t.Fatal("a description disagreeing with the file's frontmatter was accepted")
 		}
 	})
@@ -267,7 +271,7 @@ func TestFillAgentFromFile_IsLoud(t *testing.T) {
 			t.Fatal(err)
 		}
 		s := spec.Skill{Name: "ghost", Type: "agent"}
-		if err := fillAgentFromFile(&s, "ghost", root); err == nil {
+		if err := fillSkillFromFile(&s, "ghost", root, "", nil); err == nil {
 			t.Fatal("an unreadable agent file was accepted as absent")
 		}
 	})
@@ -276,7 +280,7 @@ func TestFillAgentFromFile_IsLoud(t *testing.T) {
 		root := t.TempDir()
 		writeAgentFixture(t, root, "pr-validator", "# From the file.\n")
 		s := spec.Skill{Name: "pr-validator", Type: "agent", Content: "# From the file.\n"}
-		if err := fillAgentFromFile(&s, "pr-validator", root); err != nil {
+		if err := fillSkillFromFile(&s, "pr-validator", root, "", nil); err != nil {
 			t.Fatalf("an agreeing in-line body was rejected: %v", err)
 		}
 		if s.Content != "# From the file.\n" {
@@ -286,7 +290,7 @@ func TestFillAgentFromFile_IsLoud(t *testing.T) {
 }
 
 // TestReadKinds_AgentNodeReadsFromItsFile — the WIRING, not just the branch: an `agent`-type node
-// must reach `fillAgentFromFile` through readkinds.go's decode loop, which is the one funnel every
+// must reach `fillSkillFromFile` through readkinds.go's decode loop, which is the one funnel every
 // node enters the model through.
 func TestReadKinds_AgentNodeReadsFromItsFile(t *testing.T) {
 	root := t.TempDir()

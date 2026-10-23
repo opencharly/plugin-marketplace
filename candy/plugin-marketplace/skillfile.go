@@ -2,7 +2,6 @@ package marketplace
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 
 	"github.com/opencharly/sdk/candywalk"
@@ -26,8 +25,12 @@ import (
 // earlier, or from the generator's own root, and 293 of the 355 identities can publish a body
 // `preferEntity` did not choose.
 //
-// The tree constants are READ FROM THE KIT, never mirrored here: one path fact, one definition
-// (`candywalk.AgentsSkillsDir` / `candywalk.AgentsAgentsDir`).
+// The tree constants and the shape DISPATCH are READ FROM THE KIT, never mirrored here: one path
+// fact, one definition. `candywalk.ShapeOf` maps a node's `type:` to its authored layout,
+// `candywalk.ReadNodeBody` resolves that layout's file (and owns the default-tree rule), and
+// `candywalk.NodeBodyLocation` names the file a message reports — so this generator and
+// deploykit's validator cannot disagree about where a body lives (opencharly/sdk#456). This file
+// used to carry its own `if s.Type == "agent"` branch, i.e. a second copy of the rule.
 
 // skillTrees maps each candy's node name to the trees its skills are read from: the candy's
 // `skills:` list, or the Agent-Skills standard when it declares none.
@@ -71,6 +74,12 @@ func skillTrees(ents []candywalk.Entity) (map[string][]string, error) {
 //   - `agent` — .agents/agents/<name>.md, ONE file, and `skills:` does not govern it (D8): a
 //     sub-agent definition is not a skill.
 //
+// WHERE each of those lives is NOT decided here: `candywalk.ReadNodeBody` dispatches on the shape
+// and owns the default-tree rule, so the generator and the validator (deploykit's collector) read
+// one resolution instead of two copies of it (opencharly/sdk#456). What stays here is the
+// RECONCILIATION between the node and the file, which is a publication rule and belongs to the
+// publisher.
+//
 // node is the entity's node name; sourceRoot the tree of the entity dedupeEntities chose (F13:
 // nothing here may re-decide which tree is read); root is the generator's root, used only when the
 // entity is LOCAL and therefore carries no SourceRoot; trees are the SKILL trees its owning candy
@@ -95,80 +104,37 @@ func fillSkillFromFile(s *spec.Skill, node, sourceRoot, root string, trees []str
 	if base == "" {
 		base = root
 	}
-	if s.Type == "agent" {
-		return fillAgentFromFile(s, name, base)
+	body, err := candywalk.ReadNodeBody(base, name, s.Type, trees)
+	if err != nil {
+		return fmt.Errorf("skill %q: %w", name, err)
 	}
-	var sf *candywalk.SkillFile
-	for _, t := range trees {
-		found, err := candywalk.ReadSkillFile(filepath.Join(base, t), name)
-		if err != nil {
-			return fmt.Errorf("skill %q: %w", name, err)
-		}
-		if found != nil {
-			// The first declared tree that holds it wins.
-			sf = found
-			break
-		}
-	}
-	if sf == nil {
+	if body == nil {
 		if s.Content == "" {
-			return fmt.Errorf("skill %q: no body — neither an inline `content:` nor a SKILL.md under %v", name, trees)
+			return fmt.Errorf("skill %q: no body — neither an inline `content:` nor %s", name, candywalk.NodeBodyLocation(s.Type, name, trees))
 		}
 		// The transitional in-line form, still valid until the relocation's own final leg.
 		return nil
 	}
-	if s.Content != "" && s.Content != sf.Content {
+	if s.Content != "" && s.Content != body.Content {
 		return fmt.Errorf("skill %q: the node's inline `content:` and its file disagree — delete the inline body and keep the file", name)
 	}
-	if s.Description != "" && s.Description != sf.Description {
+	if s.Description != "" && s.Description != body.Description {
 		return fmt.Errorf("skill %q: the node's inline `description:` and its file's frontmatter disagree", name)
 	}
-	s.Description = sf.Description
-	s.Content = sf.Content
-	if len(s.References) > 0 && len(sf.References) > 0 {
+	s.Description = body.Description
+	s.Content = body.Content
+	// An agent shape has no references/ half by construction, so body.References is always empty
+	// there and neither rule can fire for it — the two classes converge on ONE reconciliation.
+	if len(s.References) > 0 && len(body.References) > 0 {
 		return fmt.Errorf("skill %q: references are declared BOTH inline and under references/ in the file — keep one", name)
 	}
-	if len(sf.References) > 0 {
-		refs := make([]spec.SkillReference, 0, len(sf.References))
-		for _, r := range sf.References {
+	if len(body.References) > 0 {
+		refs := make([]spec.SkillReference, 0, len(body.References))
+		for _, r := range body.References {
 			refs = append(refs, spec.SkillReference{Name: r.Stem, Content: r.Content})
 		}
 		s.References = refs
 	}
-	return nil
-}
-
-// fillAgentFromFile completes one WINNING `agent`-type entity from the file its repository owns:
-// .agents/agents/<name>.md, ONE file directly under the agents tree.
-//
-// It is a separate branch rather than a path parameter to the skill read, because the two shapes
-// differ in more than their path: an agent has no entry DIRECTORY (so there is no `trees` lookup to
-// walk) and no references/ half (the emitter publishes none, so there is nothing to reconcile
-// there). `skills:` deliberately plays no part — a list of SKILL trees does not govern a sub-agent
-// definition, which is what makes a mixed repo legal.
-//
-// The three loud rules are the skill branch's, unchanged, and for the same reason: an agent body
-// that goes missing is a published sub-agent silently subtracted from the corpus.
-func fillAgentFromFile(s *spec.Skill, name, base string) error {
-	af, err := candywalk.ReadAgentFile(filepath.Join(base, candywalk.AgentsAgentsDir), name)
-	if err != nil {
-		return fmt.Errorf("agent %q: %w", name, err)
-	}
-	if af == nil {
-		if s.Content == "" {
-			return fmt.Errorf("agent %q: no body — neither an inline `content:` nor %s/%s.md", name, candywalk.AgentsAgentsDir, name)
-		}
-		// The transitional in-line form, still valid until the relocation's own final leg.
-		return nil
-	}
-	if s.Content != "" && s.Content != af.Content {
-		return fmt.Errorf("agent %q: the node's inline `content:` and its file disagree — delete the inline body and keep the file", name)
-	}
-	if s.Description != "" && s.Description != af.Description {
-		return fmt.Errorf("agent %q: the node's inline `description:` and its file's frontmatter disagree", name)
-	}
-	s.Description = af.Description
-	s.Content = af.Content
 	return nil
 }
 

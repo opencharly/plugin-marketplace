@@ -103,3 +103,88 @@ func TestFillSkillFromFile_HonoursADeclaredTree(t *testing.T) {
 		t.Errorf("content = %q, want the declared tree's body", s.Content)
 	}
 }
+
+// TestFillSkillFromFile_NoBodyMessageNamesTheShapesOwnFile — the "no body" message must name the
+// file the node's SHAPE reads, for both classes and through the one funnel.
+//
+// This is the generator's half of opencharly/sdk#456's user-visible defect. Before the resolution
+// moved into candywalk, the skill branch named its trees as a Go SLICE ("a SKILL.md under
+// [.agents/skills]") and the agent branch had its own message; neither was derived from the shape
+// mapping, so nothing stopped them naming the other class's path — which is exactly what
+// deploykit's collector did, for every `agent` node, on every repo that declares one.
+func TestFillSkillFromFile_NoBodyMessageNamesTheShapesOwnFile(t *testing.T) {
+	tree := t.TempDir()
+
+	t.Run("skill", func(t *testing.T) {
+		s := spec.Skill{Family: "internals", Owner: "charly-internals"}
+		err := fillSkillFromFile(&s, "ghost", tree, tree, []string{".agents/skills"})
+		if err == nil {
+			t.Fatal("a body-less skill was accepted")
+		}
+		if want := filepath.Join(".agents/skills", "ghost", "SKILL.md"); !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q — the message must be the shape's own file", err, want)
+		}
+	})
+
+	t.Run("agent", func(t *testing.T) {
+		s := spec.Skill{Family: "internals", Owner: "charly-internals", Type: "agent"}
+		err := fillSkillFromFile(&s, "ghost", tree, tree, []string{".agents/skills"})
+		if err == nil {
+			t.Fatal("a body-less agent was accepted")
+		}
+		if want := filepath.Join(".agents/agents", "ghost.md"); !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q — the message must be the shape's own file", err, want)
+		}
+		if strings.Contains(err.Error(), ".agents/skills") {
+			t.Errorf("error %q names the SKILLS tree for an agent node — the #456 misdirection", err)
+		}
+	})
+}
+
+// TestFillSkillFromFile_BothShapesThroughOneFunnel — the consolidation this leg lands, pinned as
+// behaviour: the two authored classes are reconciled by ONE function over candywalk's resolution,
+// and each class reads ITS tree only. A future re-split that re-introduces a per-shape branch, or
+// that lets one class read the other's tree, breaks this.
+func TestFillSkillFromFile_BothShapesThroughOneFunnel(t *testing.T) {
+	// The marker sits in the BODY as well as the description, so the two classes' files differ in
+	// the field this arm compares: a fixture that only varied the frontmatter would pass while the
+	// resolver read the wrong tree.
+	const entry = "---\nname: shared\ndescription: |-\n  one body.\n---\n\n# shared\n\none body.\n"
+
+	t.Run("each-shape-reads-its-own-tree", func(t *testing.T) {
+		tree := t.TempDir()
+		writeSkillFile(t, tree, ".agents/skills", "shared", strings.ReplaceAll(entry, "one body.", "skill body."))
+		if err := os.MkdirAll(filepath.Join(tree, ".agents/agents"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tree, ".agents/agents", "shared.md"), []byte(strings.ReplaceAll(entry, "one body.", "agent body.")), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		skill := spec.Skill{Family: "internals", Owner: "charly-internals"}
+		if err := fillSkillFromFile(&skill, "shared", tree, tree, []string{".agents/skills"}); err != nil {
+			t.Fatalf("skill shape: %v", err)
+		}
+		if want := "skill body."; !strings.Contains(skill.Content, want) {
+			t.Errorf("skill content = %q, want the SKILLS tree's body (%q)", skill.Content, want)
+		}
+
+		agent := spec.Skill{Family: "internals", Owner: "charly-internals", Type: "agent"}
+		if err := fillSkillFromFile(&agent, "shared", tree, tree, []string{".agents/skills"}); err != nil {
+			t.Fatalf("agent shape: %v", err)
+		}
+		if want := "agent body."; !strings.Contains(agent.Content, want) {
+			t.Errorf("agent content = %q, want the AGENTS tree's body (%q)", agent.Content, want)
+		}
+	})
+
+	t.Run("a-mis-placed-body-is-not-found", func(t *testing.T) {
+		tree := t.TempDir()
+		// ONLY a skills-tree body, and the node is an agent: `skills:` does not govern that class.
+		writeSkillFile(t, tree, ".agents/skills", "shared", entry)
+		agent := spec.Skill{Family: "internals", Owner: "charly-internals", Type: "agent"}
+		if err := fillSkillFromFile(&agent, "shared", tree, tree, []string{".agents/skills"}); err == nil {
+			t.Fatal("an agent node read a body from the SKILLS tree — a mis-placed body must not publish")
+		}
+	})
+}

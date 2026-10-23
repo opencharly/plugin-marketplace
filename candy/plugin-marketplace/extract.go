@@ -104,7 +104,9 @@ func extractSkills(root string, ents []candywalk.Entity) (skills, agents int, er
 		// .agents/agents/<name>.md, with no entry directory and no references/ half (D8). It is the
 		// only type whose destination does not come from the candy's `skills:` list — so it is
 		// branched BEFORE the tree lookup, not through it.
-		if s.Type == "agent" {
+		// WHERE the body goes is candywalk.ShapeOf's answer, not a comparison here: the shape that
+		// the reader resolves is the shape the writer writes (opencharly/sdk#456).
+		if candywalk.ShapeOf(s.Type) == candywalk.ShapeAgentFile {
 			if err := writeAgentFile(root, name, s); err != nil {
 				return skills, agents, err
 			}

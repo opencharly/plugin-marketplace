@@ -2,6 +2,8 @@ package marketplace
 
 import (
 	"sort"
+
+	"github.com/opencharly/sdk/candywalk"
 )
 
 // emit_dispatcher.go — the R0 skill-dispatcher projection. The dispatcher table is the routing
@@ -31,7 +33,7 @@ func emitDispatcher(em emissions, families []family) {
 	var entries []dispatcherEntry
 	for _, f := range families {
 		for _, s := range f.Skills {
-			if s.Type == "agent" || len(s.Triggers) == 0 {
+			if candywalk.ShapeOf(s.Type) == candywalk.ShapeAgentFile || len(s.Triggers) == 0 {
 				continue
 			}
 			entries = append(entries, dispatcherEntry{
@@ -100,7 +102,7 @@ func emitOpencodeIndex(em emissions, ks *kindSet, families []family) {
 	idx := opencodeIndex{}
 	for _, f := range families {
 		for _, s := range f.Skills {
-			if s.Type == "agent" {
+			if candywalk.ShapeOf(s.Type) == candywalk.ShapeAgentFile {
 				continue
 			}
 			files := []string{"SKILL.md"}
