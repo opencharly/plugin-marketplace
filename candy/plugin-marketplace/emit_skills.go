@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opencharly/sdk/candywalk"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -16,7 +17,7 @@ import (
 func emitSkills(em emissions, families []family) {
 	for _, f := range families {
 		for _, s := range f.Skills {
-			if s.Type == "agent" {
+			if candywalk.ShapeOf(s.Type) == candywalk.ShapeAgentFile {
 				emitAgent(em, f.Name, s)
 				continue
 			}

@@ -1,5 +1,9 @@
 package marketplace
 
+import (
+	"github.com/opencharly/sdk/candywalk"
+)
+
 // emit_catalogs.go — the additional per-harness catalogs the marketplace root ships:
 //
 //   - kimi.plugin.json — the Kimi Code plugin manifest. Kimi's plugin model is one-repo-per-plugin
@@ -56,7 +60,7 @@ func buildKimiManifest(ks *kindSet, families []family) kimiPluginJSON {
 	for _, f := range families {
 		var hasSkills, hasAgents bool
 		for _, s := range f.Skills {
-			if s.Type == "agent" {
+			if candywalk.ShapeOf(s.Type) == candywalk.ShapeAgentFile {
 				hasAgents = true
 			} else {
 				hasSkills = true
