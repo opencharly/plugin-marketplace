@@ -32,15 +32,24 @@ type kindSet struct {
 //
 // REMOTE-REF-AWARE (the candy de-submodule cutover Phase 3): the walk is CollectEntitiesRemote,
 // so every @github.com/opencharly/... ref in the walked files' require:/candy: lists is resolved
-// through spec/refs.DownloadRepo and the fetched repos' skill:/hook:/marketplace: entities are
-// unioned in, transitively. After Phase 4 deletes the in-repo candy/ dirs this is what keeps
-// every moved candy's skill/hook entity emitting.
+// and the fetched repos' skill:/hook:/marketplace: entities are unioned in, transitively. After
+// Phase 4 deletes the in-repo candy/ dirs this is what keeps every moved candy's skill/hook
+// entity emitting.
+//
+// The resolver is refs.DownloadRepoFiles, NOT refs.DownloadRepo: a corpus source is read for its
+// OWN TREE only — charly.yml and the .agents/ trees — so the fetch certifies exactly that.
+// refs.DownloadRepo populates every submodule the fetched repo declares and fails the whole fetch
+// when one is unreachable: right for a `--repo` cache, fatal here, because it made
+// opencharly/opencharly (412 declared gitlinks) unusable as a corpus source at all (spec#279)
+// after already costing a 431-gitlink population the walk reads none of (spec#267). The two
+// fetches share one signature, so this stays a plain seam — no SDK change, and the `--repo` cache
+// keeps populating.
 func readKinds(root string) (*kindSet, error) {
 	roots, err := candywalk.RepoRoots(root)
 	if err != nil {
 		return nil, fmt.Errorf("discover repo roots: %w", err)
 	}
-	ents, err := candywalk.CollectEntitiesRemote(roots, refs.DownloadRepo)
+	ents, err := candywalk.CollectEntitiesRemote(roots, refs.DownloadRepoFiles)
 	if err != nil {
 		return nil, fmt.Errorf("collect entities: %w", err)
 	}

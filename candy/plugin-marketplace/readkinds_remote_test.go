@@ -93,3 +93,62 @@ func newestTag(t *testing.T, repoPath string) string {
 	}
 	return tags[len(tags)-1]
 }
+
+// TestReadKinds_FetchesCorpusSourcesFilesOnly pins the FETCH MODE the walk uses (spec#279).
+//
+// A corpus source is read for its OWN TREE — charly.yml and the .agents/ trees — so the fetch
+// must certify exactly that and no more. refs.DownloadRepo (the pre-fix resolver) populates every
+// submodule the fetched repo declares and fails the whole fetch when one is unreachable, which is
+// right for a `--repo` cache and was fatal here: opencharly/opencharly declares 412 gitlinks and
+// could not be a corpus source at all (spec#279), after the population had already been measured
+// as a pure cost on the same walk (spec#267).
+//
+// The DISCRIMINATOR is the cache entry: a files-only fetch publishes ONLY its own entry, so after
+// readKinds the whole-project entry for the fetched ref must not exist. FAILS without the change:
+// the pre-fix resolver writes exactly that entry. (Arm 2 — the `--repo` cache still populating —
+// and arm 3 — an unreachable submodule still failing it loudly — are pinned in spec/refs, at the
+// code path that owns them.)
+func TestReadKinds_FetchesCorpusSourcesFilesOnly(t *testing.T) {
+	tag := newestTag(t, "github.com/opencharly/layer-ripgrep")
+	// A FRESH cache: the verdict is about what THIS walk fetched, not about what an earlier
+	// session left behind (a warm entry is exactly the trap spec#279 was filed for).
+	t.Setenv("CHARLY_REPO_CACHE", t.TempDir())
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "candy", "local-keeper"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ref := "@github.com/opencharly/layer-ripgrep:" + tag
+	local := "local-keeper:\n    candy:\n        version: 2026.200.1000\n        description: Local fixture.\n        candy:\n            - '" + ref + "'\n"
+	if err := os.WriteFile(filepath.Join(root, "candy", "local-keeper", "charly.yml"), []byte(local), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "candy", "charly-marketplace"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "candy", "charly-marketplace", "charly.yml"),
+		[]byte("charly-marketplace:\n    marketplace:\n        name: charly\n        owner: opencharly\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ks, err := readKinds(root)
+	if err != nil {
+		t.Fatalf("readKinds: %v", err)
+	}
+	fetched := false
+	for _, s := range ks.Skills {
+		if s.Name == "ripgrep" {
+			fetched = true
+		}
+	}
+	if !fetched {
+		t.Fatalf("the walk must still RESOLVE the remote candy (it fetched nothing?); got %d skills", len(ks.Skills))
+	}
+	cached, err := refs.IsRepoCached("github.com/opencharly/layer-ripgrep", tag)
+	if err != nil {
+		t.Fatalf("IsRepoCached: %v", err)
+	}
+	if cached {
+		t.Fatal("readKinds wrote a WHOLE-PROJECT cache entry: the corpus walk must fetch files-only (spec#279)")
+	}
+}
