@@ -57,9 +57,9 @@ func buildEmissions(ks *kindSet, families []family) emissions {
 }
 
 // drift runs the same pipeline in memory and compares with the on-disk generated artifacts (the
-// corpus under out, the harness surface under root). Any difference is a hard failure (exit 1)
-// with a diff summary. It never writes, and it runs in no CI workflow — it is red only for
-// whoever runs it, via `task skills:drift` or by hand.
+// corpus under out). Any difference is a hard failure (exit 1) with a diff summary. It never
+// writes, and this repository's drift-gate workflow runs it on every push (via
+// `task skills:drift`), so a stale mirror is red in CI, not only for whoever runs it by hand.
 func drift(root, out string) error {
 	ks, err := readKinds(root)
 	if err != nil {

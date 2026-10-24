@@ -18,21 +18,22 @@ type marketplaceCLI struct {
 
 // generateCmd renders every generated artifact: the marketplace corpus into --out (the
 // standalone opencharly/marketplace repo root — skills, agents, the per-family manifests, the
-// Claude/Codex/kimi/pi catalogs, profiles.json, the setup launcher) and the charly-local harness
-// surface into --root (.claude/ hooks + settings, the dispatcher section). It rewrites the
+// Claude/Codex/kimi/pi catalogs, profiles.json). --root is the repo root
+// that holds the ONE generation input (the refs list, candy/charly-marketplace/charly.yml); for
+// the corpus that is the corpus checkout itself, so both flags name it. It rewrites the
 // generated trees wholesale after pruning by the DO-NOT-EDIT header, so a deleted source entity
 // disappears instead of lingering.
 type generateCmd struct {
-	Root string `name:"root" help:"Repo root holding charly.yml, candy/, box/, .claude/ (default: cwd)"`
+	Root string `name:"root" help:"Repo root holding the generation input (the refs list) -- the corpus checkout (default: cwd)"`
 	Out  string `name:"out" required:"" help:"Marketplace corpus root to write into (the opencharly/marketplace checkout)"`
 }
 
 // driftCmd is a fail-closed no-op check: the same pipeline in memory, compared byte-for-byte with
-// the on-disk generated artifacts (the corpus under --out, the harness surface under --root).
-// Any difference is a hard failure (exit 1) with a diff summary. It runs in no CI workflow — it
-// is red only for whoever runs it, via `task skills:drift` or by hand.
+// the on-disk generated artifacts (the corpus under --out). Any difference is a hard failure
+// (exit 1) with a diff summary. The repository's own drift-gate workflow runs it on every push
+// (via `task skills:drift`), so a stale mirror is red in CI, not only for whoever runs it.
 type driftCmd struct {
-	Root string `name:"root" help:"Repo root (default: cwd)"`
+	Root string `name:"root" help:"Repo root holding the generation input (the refs list) -- the corpus checkout (default: cwd)"`
 	Out  string `name:"out" required:"" help:"Marketplace corpus root to compare against (the opencharly/marketplace checkout)"`
 }
 

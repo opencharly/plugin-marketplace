@@ -7,7 +7,8 @@ import (
 // emit_marketplace.go — the marketplace ROOT manifests: .claude-plugin/marketplace.json
 // (the `charly-plugins` catalog the harness's extraKnownMarketplaces + the docs generator read),
 // .agents/plugins/marketplace.json (the Codex CLI / AGENTS-framework catalog), and
-// profiles.json (the developer/user/container_families membership the setup installer used).
+// profiles.json (the developer/user/container_families membership, derived from each family's
+// declared `profiles:` meta).
 // All derive entirely from the marketplace entity — the single source.
 
 // marketplaceManifest is the Claude Code catalog shape. `description` and `version` are

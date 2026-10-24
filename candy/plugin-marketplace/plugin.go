@@ -1,13 +1,15 @@
 // Package marketplace is the charly plugin housing the `charly marketplace …` CLI — the
-// generator that regenerates the ENTIRE `charly-plugins` marketplace + harness surface from
+// generator that regenerates the ENTIRE `charly-plugins` marketplace corpus from
 // candy config. It reads every candy's `skill:` / `hook:` / `marketplace:` kind entities,
 // aggregates them by marketplace family, and emits the corpus into --out (the standalone
-// opencharly/marketplace repo root) + the .claude/ hooks + settings + the R0 dispatcher into
-// --root (the charly checkout). `charly marketplace drift` is the fail-closed no-op gate.
+// opencharly/marketplace repo root). --root is the repo root that holds the ONE generation
+// input (the refs list, candy/charly-marketplace/charly.yml) — for the corpus that is the
+// corpus checkout itself, so both flags name it. `charly marketplace drift` is the
+// fail-closed no-op gate.
 //
 // command:marketplace — `charly marketplace generate|drift`. This plugin is deliberately NOT
 // listed in charly/charly.yml's compiled_plugins: it is a DEV-TIME generator, run on a
-// contributor's machine to regenerate the harness surface, and has no business inside every
+// contributor's machine to regenerate the corpus, and has no business inside every
 // shipped static charly binary. So it takes the OUT-OF-PROCESS placement (the plugin-docs
 // model): the host prescans the declared `marketplace` word into the Kong grammar before parse
 // and syscall.Exec's this binary in CLI mode (sdk.Main → CliMain) on first invocation.

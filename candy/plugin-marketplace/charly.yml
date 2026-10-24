@@ -2,7 +2,7 @@ plugin-marketplace:
     candy:
         description: |-
             RUNTIME (out-of-process) charly plugin serving `charly marketplace …` — the generator
-            that regenerates the ENTIRE `charly-plugins` marketplace + harness surface from candy
+            that regenerates the ENTIRE `charly-plugins` marketplace corpus from candy
             config. It reads every candy's `skill:` / `hook:` / `marketplace:` kind entities (the
             candywalk discovery), aggregates them by marketplace family, and emits — into --out,
             the STANDALONE opencharly/marketplace repo's root (the corpus): <family>/skills/*/
@@ -10,19 +10,24 @@ plugin-marketplace:
             + .codex-plugin/plugin.json + .mcp.json, .claude-plugin/marketplace.json (Claude Code /
             Cursor), .agents/plugins/marketplace.json (Codex / the AGENTS framework), kimi.plugin.json
             (Kimi — the whole marketplace is one plugin), package.json (pi — the whole marketplace
-            is one pi package), profiles.json, and the setup launcher — and — into --root, the
-            charly-local harness surface: the .claude/settings.json plugin-owned keys, .claude/hooks/*
-            (from hook entities) and the generated R0 dispatcher section in CLAUDE.md/AGENTS.md.
+            is one pi package), profiles.json. --root is NOT a second
+            destination: it is the repo root that holds the ONE generation input (the refs list,
+            `candy/charly-marketplace/charly.yml`), so both flags name the corpus checkout.
             `charly marketplace drift` is the fail-closed no-op gate: it regenerates in memory and
-            compares with the artifacts ON DISK (the corpus under --out, the surface under --root),
+            compares with the artifacts ON DISK (the corpus under --out),
             never with git, so it proves "regeneration is a no-op" and says nothing about whether
             the tree is committed — this repository's `task skills:drift` recipe adds that `git
-            status` half, and the marketplace repo's deploy workflow runs the same gate on a fresh
-            checkout at its pinned charly. A stale mirror is a hard failure, but drift runs in no
-            CI workflow of this repo: the marketplace repo's own gate owns the corpus.
+            status` half, and this repository's own `drift-gate` workflow runs that recipe on
+            every merge to main, against the corpus commit MARKETPLACE_REF below (read from this
+            file, never repeated as a second literal), so the gate cannot wait for a human. The
+            marketplace repo's deploy
+            workflow runs the same command on a fresh checkout at its pinned charly: that job owns
+            the CORPUS side (the committed corpus matches its pinned toolchain), and this one owns
+            the GENERATOR side (this generator reproduces the corpus commit this plugin declares).
+            A stale mirror is a hard failure in both.
 
             PLACEMENT — deliberately NOT listed in charly/charly.yml compiled_plugins. This is a
-            DEV-TIME generator, run on a contributor's machine to regenerate the harness surface
+            DEV-TIME generator, run on a contributor's machine to regenerate the corpus
             and nowhere else, so it has no business inside every shipped static charly binary. The
             generator is self-contained — it reads files and writes files, never reaching the host
             reverse channel — which is what makes the out-of-process placement free here (the same
@@ -42,7 +47,14 @@ plugin-marketplace:
             # clone layer's cache key moves only when this string moves. It must equal the
             # marketplace repo's current `main` head; `task marketplace:pin` checks that, and the
             # pinned-commit check below asserts it from inside the built image.
-            MARKETPLACE_REF: e802da680687c7016d1c9baf505880712d505076
+            #
+            # It is ALSO the baseline this repository's `drift-gate` workflow compares against:
+            # the job READS this value out of this file rather than repeating it, so the gate's
+            # baseline and this pin can never be two pins that drift apart. The corpus commit
+            # named here must be one this repository's generator reproduces — the gate proves
+            # exactly that, and the proof is the reason a bump to a newer corpus commit lands
+            # with the generator that reproduces it.
+            MARKETPLACE_REF: cc10955e4e0ac4f3f4bcc464a04433e653d71400
         distro:
             fedora:
                 package:
@@ -75,7 +87,7 @@ plugin-marketplace:
               id: marketplace-pinned-commit
               exit_status: 0
               stdout:
-                - contains: e802da680687c7016d1c9baf505880712d505076
+                - contains: cc10955e4e0ac4f3f4bcc464a04433e653d71400
               context:
                 - build
                 - runtime

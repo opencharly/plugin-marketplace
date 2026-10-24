@@ -10,10 +10,9 @@ import (
 
 // prune.go — the generated-artifact boundary. `scanGenerated` returns every canonical path that
 // is CURRENTLY generated on disk: header-carrying markdown under the owned corpus trees
-// (<out>/<family>/skills + agents), the known JSON paths (per-family plugin.json/.mcp.json +
-// the marketplace root manifests + the setup launcher), and .claude/hooks under root (fully
-// generated — every gate script + aux file is a hook entity). The boundary is content (the
-// header) for markdown and known-path + existence for JSON/hooks — never location inference.
+// (<out>/<family>/skills + agents) and the known JSON paths (per-family plugin.json/.mcp.json +
+// the marketplace root manifests). The boundary is content (the header) for markdown and
+// known-path + existence for JSON — never location inference.
 // Hand-authored files (README.md, CHANGELOG/, LICENSE, scripts/, kimi-user-config.toml) carry no
 // header and sit outside the known paths, so they are preserved. `generate` deletes the scanned
 // set before writing; `drift` flags a scanned path absent from the emissions map as stale.
@@ -41,8 +40,9 @@ func pruneGenerated(root, out string, families []family, ks *kindSet) error {
 	return nil
 }
 
-// scanGenerated lists the canonical paths of every currently-generated artifact that EXISTS,
-// under both trees: the corpus under outDir and the harness surface under root.
+// scanGenerated lists the canonical paths of every currently-generated artifact that EXISTS
+// in the corpus under outDir. The generator writes the corpus and nothing else, so there is no
+// second tree to scan.
 func scanGenerated(root, outDir string, families []family, ks *kindSet) ([]string, error) {
 	var out []string
 	addCorpus := func(rel string) {
@@ -78,7 +78,7 @@ func scanGenerated(root, outDir string, families []family, ks *kindSet) ([]strin
 			}
 		}
 	}
-	// 2. known JSON paths per family + the marketplace root + the setup launcher.
+	// 2. known JSON paths per family + the marketplace root.
 	for _, f := range families {
 		addCorpus("plugins/" + f.Name + "/.claude-plugin/plugin.json")
 		addCorpus("plugins/" + f.Name + "/.codex-plugin/plugin.json")
