@@ -356,9 +356,8 @@ postgresql-skill:
 `
 
 // TestGenerateSplitOut proves the cutover shape: the corpus lands under --out with the legacy
-// "plugins/" prefix stripped, while the harness surface (.claude/, dispatcher) stays at root —
-// the standalone-marketplace invocation (`charly marketplace generate --root <charly> --out
-// <marketplace>`).
+// "plugins/" prefix stripped, and NOTHING is written outside it — the standalone-marketplace
+// invocation (`charly marketplace generate --root <corpus> --out <corpus>`).
 func TestGenerateSplitOut(t *testing.T) {
 	dir := writeFixture(t)
 	out := filepath.Join(dir, "marketplace")

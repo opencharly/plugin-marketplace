@@ -45,7 +45,7 @@ marketplace-app:
             The marketplace-corpus box: a minimal Fedora base composing the local
             plugin-marketplace candy, whose plan: clones the published
             opencharly/marketplace repo at the pinned MARKETPLACE_REF and gates its
-            shape (catalogs, manifests, baked headers, setup). The checks run in BOTH
+            shape (catalogs, manifests, baked headers). The checks run in BOTH
             contexts, so `charly check box marketplace-app` proves the published
             corpus shape without deploying anything, and `charly check live`
             re-proves it against the running pod.
@@ -105,11 +105,10 @@ skills:drift:
             command alone is silent on the half that bites a generator change.
 
             `charly marketplace drift` regenerates in memory and compares with the
-            artifacts ON DISK -- the corpus under --out, the harness surface under
-            --root -- and NEVER consults git, by design.  So it proves
-            "regeneration is a no-op" and says nothing about whether the tree is
-            committed; a generator run that emits an untracked file passes it.  The
-            second step is that missing half.
+            artifacts ON DISK -- the corpus under --out -- and NEVER consults git,
+            by design.  So it proves "regeneration is a no-op" and says nothing about
+            whether the tree is committed; a generator run that emits an untracked
+            file passes it.  The second step is that missing half.
 
             The command names the provider word directly -- `charly marketplace
             drift` -- and NOT the ${CHARLY_BIN} placeholder this repo's box and bed
@@ -121,28 +120,52 @@ skills:drift:
             command must work with the charly binary alone, which is also what
             /charly-build:docs calls the binary-only-reader rule.
 
-            `--out` is a declared PARAM rather than a bare variable, so a caller can
-            point the drift comparison at their marketplace checkout with
-            `--param out=<path>`; the default names the usual relative path.
+            ONE parameter names the CORPUS checkout, and it is UPPER-CASE: the
+            runner's expansion grammar matches upper-case names only
+            (`sdk/kit/checkvars_expand.go`), so a lower-case param never reaches the
+            command -- the shell drops the empty word and the CLI loses the flag's
+            value ("--out: expected string value but got EOL").  The parameter is
+            the corpus checkout and it is BOTH --root and --out: the generator's ONE
+            generation input -- the refs list, `candy/charly-marketplace/charly.yml`
+            -- lives in that checkout, so --root must name it, and --out compares
+            the regeneration against it.  A caller points the gate at a checkout
+            with `--param CORPUS=<path>`; the default names the usual relative
+            path.
+
+            The second step checks the CORPUS tree's committed state, because that
+            is where the artifacts live: a corpus file that is generated but
+            untracked passes `drift` -- the bytes on disk match -- and is lost on
+            the next clone.
 
             Neither step carries `context:`: a task's steps run in-context by
             construction (the task grammar reports every step in-context), and with
             no runtime placeholder in either command there is nothing for a context
             to resolve.
+
+            The drift step declares a `timeout:`, and it is not decoration.  The
+            per-step never-hang bound is 1m30s, and the drift resolves EVERY corpus
+            source (the refs list names ~1200 repos at pinned versions) before it
+            compares a single byte: measured 11m48s in the marketplace repo's own
+            deploy workflow, ~12m locally.  Without the declared timeout the step
+            is killed at the ceiling -- "probe killed by never-hang ceiling after
+            1m30.001s" -- and the gate reports a TIMEOUT where the truth is "slow,
+            and green".  The bound is a hang guard, not a budget.
         params:
-            out:
-                description: Marketplace corpus root the drift comparison reads (the opencharly/marketplace checkout)
+            CORPUS:
+                description: Marketplace corpus checkout the gate compares against -- the generator's --root AND its --out (the opencharly/marketplace checkout)
                 default: ../marketplace
+        timeout: "2100s"
         plan:
             - check: regeneration is a no-op against the on-disk artifacts
               id: drift-noop
+              timeout: "1800s"
               command:
-                command: charly marketplace drift --root . --out ${out}
+                command: charly marketplace drift --root "${CORPUS}" --out "${CORPUS}"
                 in_container: false
-            - check: the tree is committed -- the half `drift` cannot see
+            - check: the corpus tree is committed -- the half `drift` cannot see
               id: tree-committed
               command:
-                command: test -z "$(git status --porcelain)"
+                command: test -z "$(git -C "${CORPUS}" status --porcelain)"
                 in_container: false
 
 marketplace:pin:
@@ -157,14 +180,21 @@ marketplace:pin:
             is exactly the drift this recipe exists to catch.  Both occurrences are
             asserted against the same live head, which is why it is one task and not
             two greps.
+
+            Each occurrence is found by its ANCHOR -- the `MARKETPLACE_REF:` key and
+            the `contains:` line -- and not by POSITION in the file.  A positional
+            grep is wrong here: the candy's file carries a third 40-hex string (the
+            sha256 of the byte-identical SKILL.md it copies), so a "last 40-hex
+            match" is that sha256 and the second step could never be true.  The
+            anchors name the two pins and cannot be satisfied by a third string.
         plan:
             - check: the declared MARKETPLACE_REF var equals the marketplace repo's current main head
               id: pin-var-current
               command:
-                command: test "$(git ls-remote https://github.com/opencharly/marketplace.git refs/heads/main | cut -f1)" = "$(grep -oE '[0-9a-f]{40}' candy/plugin-marketplace/charly.yml | head -1)"
+                command: 'test "$(git ls-remote https://github.com/opencharly/marketplace.git refs/heads/main | cut -f1)" = "$(grep -m 1 -oE ''MARKETPLACE_REF: [0-9a-f]{40}'' candy/plugin-marketplace/charly.yml | grep -m 1 -oE ''[0-9a-f]{40}'')"'
                 in_container: false
             - check: the duplicated literal in the check step equals the same head
               id: pin-literal-current
               command:
-                command: 'test "$(git ls-remote https://github.com/opencharly/marketplace.git refs/heads/main | cut -f1)" = "$(grep -oE ''[0-9a-f]{40}'' candy/plugin-marketplace/charly.yml | tail -1)"'
+                command: 'test "$(git ls-remote https://github.com/opencharly/marketplace.git refs/heads/main | cut -f1)" = "$(grep -m 1 -oE ''contains: [0-9a-f]{40}'' candy/plugin-marketplace/charly.yml | grep -m 1 -oE ''[0-9a-f]{40}'')"'
                 in_container: false

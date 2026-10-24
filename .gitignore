@@ -11,6 +11,10 @@ output/
 *.swp
 *~
 
+# CI toolchain and corpus checkouts (the drift-gate workflow checks both out
+# under .ci/); not authored artifacts, never versioned.
+.ci/
+
 # Migration rollback backups (charly migrate writes <file>.bak.<unix-ts>)
 *.bak
 *.bak.*

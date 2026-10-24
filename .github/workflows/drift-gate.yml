@@ -1,0 +1,119 @@
+# THE GENERATOR SIDE OF THE CORPUS CONTRACT — this repository's own drift gate,
+# in CI.
+#
+# The opencharly/marketplace repo's deploy workflow owns the CORPUS side: it
+# regenerates the corpus with its PINNED toolchain and fails when the committed
+# tree does not match.  Nothing owned the GENERATOR side.  This repository's
+# `task skills:drift` recipe existed with no CI that ran it, so a red gate
+# stayed red until a human happened to run it by hand — the decay
+# opencharly/plugin-marketplace#42 names.  This job runs that recipe on every
+# merge to `main`.
+#
+# THE BASELINE is the corpus commit THIS repository declares — `var:
+# MARKETPLACE_REF` in candy/plugin-marketplace/charly.yml — READ FROM THAT FILE,
+# never written here.  A second literal would be a second pin, and a second pin
+# drifts (R2).  The declared commit is immutable and reproducible, so the
+# comparison is stable: it proves "the generator in THIS tree reproduces the
+# corpus commit this plugin declares".
+#
+# WHY IT RUNS ON `main` AND NOT ON `pull_request`.  A generator change that
+# alters the emitted output makes the declared corpus commit stale, and the
+# corpus can only be regenerated with a RELEASED generator — so a pull-request
+# gate would be RED BY CONSTRUCTION for exactly the change it should inform,
+# and it would DEADLOCK the chain that repairs it (generator merged and tagged
+# -> the corpus repo regenerates with that tag -> the pin bumped here).  It
+# would also be a de-facto required check: the org pr-validator's `arm` job
+# waits for EVERY check on the head and arms native auto-merge only when all of
+# them are green, so one red run of this job on a pull request would stop the
+# merge that the repair chain needs first.  So this job runs where the claim it
+# makes is decidable — on the merged tree — and its red is a signal with a
+# mechanical remedy, not a wall:
+#
+#   1. the tree's generator changed the output -> let the corpus repo
+#      regenerate with the released tag, then bump MARKETPLACE_REF here (and
+#      the literal that duplicates it in the candy's plan — the duplication is
+#      by design, and `task marketplace:pin` asserts both against the corpus's
+#      live `main` head);
+#   2. the corpus advanced -> bump MARKETPLACE_REF to the corpus's new `main`
+#      head.
+#
+# The toolchain is built from SOURCE at a pinned tag, the same way the corpus's
+# own gate builds it: a released binary would be a different toolchain than the
+# one the corpus was regenerated with, and the two halves of the contract have
+# to be comparable.
+name: drift-gate
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never let two runs of the same ref race; the later one wins.
+concurrency:
+  group: drift-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: drift
+    runs-on: ubuntu-latest
+    # The drift resolves EVERY corpus source (the refs list names ~1200 repos at
+    # pinned versions) before it compares a single byte: measured 11m48s in the
+    # marketplace repo's own deploy workflow, ~12m locally from cold.  The bound
+    # is generous, not a budget — a step killed for slowness is a false red.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.0
+
+      - name: Read the declared corpus commit
+        id: corpus
+        run: |
+          # The pin is found by its ANCHOR, not by position: the candy's file carries
+          # a third 40-hex string (the sha256 of the SKILL.md it copies), so a
+          # positional "first/last 40-hex match" is not the pin.
+          sha="$(grep -m 1 -oE 'MARKETPLACE_REF: [0-9a-f]{40}' candy/plugin-marketplace/charly.yml | grep -m 1 -oE '[0-9a-f]{40}')"
+          test -n "$sha" || { echo "no MARKETPLACE_REF found in candy/plugin-marketplace/charly.yml" >&2; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "corpus baseline: $sha"
+
+      - name: Check out the corpus at the declared commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.0
+        with:
+          repository: opencharly/marketplace
+          ref: ${{ steps.corpus.outputs.sha }}
+          path: .ci/marketplace
+          persist-credentials: false
+
+      - name: Check out the pinned charly toolchain
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.0
+        with:
+          repository: opencharly/charly
+          ref: v2026.296.2116
+          path: .ci/charly
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .ci/charly/charly/go.mod
+          cache-dependency-path: .ci/charly/charly/go.sum
+
+      - name: Build the charly host
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.ci/charly/bin"
+          cd "$GITHUB_WORKSPACE/.ci/charly/charly"
+          go build -buildvcs=false -ldflags "-X main.BuildCalVer=drift-gate-ci" -o "$GITHUB_WORKSPACE/.ci/charly/bin/charly" .
+
+      - name: Put the built charly on PATH
+        # The recipe's command is the bare word `charly`, NOT the ${CHARLY_BIN}
+        # placeholder: a standalone task has no build or deploy context, so that
+        # placeholder resolves to nothing and the step is SKIPPED — a gate that
+        # reports a skip instead of a result decays silently.  The binary the
+        # host builds the plugin with must therefore be the one on PATH.
+        run: echo "$GITHUB_WORKSPACE/.ci/charly/bin" >> "$GITHUB_PATH"
+
+      - name: The drift gate
+        run: |
+          charly task skills:drift --param CORPUS="$GITHUB_WORKSPACE/.ci/marketplace"
