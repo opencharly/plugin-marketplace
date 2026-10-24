@@ -187,6 +187,13 @@ marketplace:pin:
             sha256 of the byte-identical SKILL.md it copies), so a "last 40-hex
             match" is that sha256 and the second step could never be true.  The
             anchors name the two pins and cannot be satisfied by a third string.
+
+            The `contains:` anchor is READ as the FIRST 40-hex `contains:` line, so
+            its correctness depends on there being exactly ONE such line.  That is
+            not left to chance: the third step ASSERTS the uniqueness, so an edit
+            that adds an earlier 40-hex `contains:` fails with a step that says
+            what broke, instead of the second step comparing the head against the
+            wrong sha.  The assertion is the note, in a form that runs.
         plan:
             - check: the declared MARKETPLACE_REF var equals the marketplace repo's current main head
               id: pin-var-current
@@ -197,4 +204,9 @@ marketplace:pin:
               id: pin-literal-current
               command:
                 command: 'test "$(git ls-remote https://github.com/opencharly/marketplace.git refs/heads/main | cut -f1)" = "$(grep -m 1 -oE ''contains: [0-9a-f]{40}'' candy/plugin-marketplace/charly.yml | grep -m 1 -oE ''[0-9a-f]{40}'')"'
+                in_container: false
+            - check: the candy's file carries exactly one 40-hex contains anchor
+              id: pin-anchor-unique
+              command:
+                command: 'test "$(grep -oE ''contains: [0-9a-f]{40}'' candy/plugin-marketplace/charly.yml | wc -l)" = "1"'
                 in_container: false
