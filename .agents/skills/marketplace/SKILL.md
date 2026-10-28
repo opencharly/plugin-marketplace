@@ -27,12 +27,12 @@ with every such move — so the map is not restated here.
 **The map is the refs list.** `candy/charly-marketplace/charly.yml` is the ONE generation
 input: it names the sources that own `skill:`/`hook:`/`marketplace:` entities, and a source
 it does not name reaches the corpus only through the closure of a ref that does. A published
-body is the byte-identical copy of ONE source's body — that source's
-`.agents/skills/<name>/SKILL.md` file, or the inline body of its manifest's `skill:` node.
-The generator writes that body with the ONE trailing newline the EOF convention
-prescribes — and an authored file already ends with one, so a source file and its
-projection agree byte for byte. So the owner of a published skill is the source whose body
-matches the published one
+body is the byte-identical copy of ONE source's body — the text after the frontmatter of
+that source's `.agents/skills/<name>/SKILL.md` file, or the inline body of its manifest's
+`skill:` node. The generator writes that body with the ONE trailing newline the EOF
+convention prescribes — and an authored file already ends with one — so the source's body
+and the published body (the one that follows the generated header) agree byte for byte. So
+the owner of a published skill is the source whose body matches the published one
 byte for byte: read the refs list for the sources, then match.
 
 A skill edit lands in the OWNING repo as a FILE — `<owning repo>/.agents/skills/<name>/SKILL.md`,
