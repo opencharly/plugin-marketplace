@@ -25,7 +25,7 @@ import (
 // charly checkout's require:/candy: closure and unions in every reachable repo's entities, which is
 // exactly right for the org-wide corpus. It is the wrong tool here twice over. It reaches the
 // network, and — measured — its walk yields NONE of a repository's own root-manifest entities:
-// pointed at a copy of the real layer-charly-internals (a root charly.yml carrying ~20
+// pointed at a copy of what layer-charly-internals carried then (a root charly.yml carrying ~20
 // `agents-skill: skill:` nodes) it returned zero entities of every kind, git repo and non-git alike.
 // Reading the manifests directly is simpler, offline, and makes ownership vanish as a question: a
 // manifest this repo holds IS this repo's entity.
@@ -58,7 +58,7 @@ func extract(root string) error {
 }
 
 // repoManifests lists the manifests a repo root owns, in the same places the walker reads them: the
-// root charly.yml (where a concept candy such as layer-charly-internals keeps its family's entities)
+// root charly.yml (where a concept candy such as opencharly/opencharly keeps its family's entities)
 // and every candy/<name>/charly.yml (where a plugin candy keeps its own).
 func repoManifests(dir string) ([]string, error) {
 	manifests := []string{"charly.yml"}
