@@ -183,10 +183,11 @@ marketplace:pin:
 
             Each occurrence is found by its ANCHOR -- the `MARKETPLACE_REF:` key and
             the `contains:` line -- and not by POSITION in the file.  A positional
-            grep is wrong here: the candy's file carries a third 40-hex string (the
-            sha256 of the byte-identical SKILL.md it copies), so a "last 40-hex
-            match" is that sha256 and the second step could never be true.  The
-            anchors name the two pins and cannot be satisfied by a third string.
+            grep is wrong here: the candy's file used to carry a third 40-hex string
+            (the sha256 of the SKILL.md it copied from another repo), which a "last
+            40-hex match" would have picked instead of the pin.  That copy is gone --
+            the prose is authored here now -- but the anchors remain the right way to
+            name the two pins: they cannot be satisfied by a third string.
 
             The `contains:` anchor is READ as the FIRST 40-hex `contains:` line, so
             its correctness depends on there being exactly ONE such line.  That is
