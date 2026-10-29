@@ -56,13 +56,28 @@ not restated here.
 - Regeneration on a clean tree is a NO-OP for the committed corpus (hand-authored files
   sit outside the known paths); a diff means a refs/source change is in flight.
 
-## The drift gate (deploy.yml is the SOLE OWNER of generation)
+## The drift gate (the marketplace repo's `scripts/drift-gate.sh` — ONE implementation, TWO callers)
 
 The marketplace repo's deploy workflow builds the pinned charly, regenerates the ENTIRE
-corpus, and FAILS if the committed corpus does not match — including UNTRACKED
-regenerated files (`git status --porcelain`, not just `git diff --exit-code`). A refs
-bump must therefore ship its regenerated corpus in the same PR, or the gate trips on the
-next run.
+corpus, and FAILS if the committed corpus does not match. The check lives in ONE script,
+the marketplace repo's `scripts/drift-gate.sh`, and BOTH of that repo's workflows run it:
+`deploy.yml` on every PR, and the daily refresh on the tree its own PR would commit.
+
+The gate asks "did the tree move since the index was set", in two halves: the WORKING
+TREE against the INDEX (`git diff --quiet`), and the files in NO index at all
+(`git ls-files --others --exclude-standard`) — the second half is what a diff alone
+misses, because a generator that emits NEW artifacts creates them as untracked files. It
+deliberately does NOT use `git status --porcelain`: that command reports the index column
+as well as the worktree column, and the refresh stages its regenerated corpus on purpose,
+so a gate built on it fails on the refresh job's tree shape, every time it runs there.
+Measured 2026-10-29 on the refresh's own tree: a check built on it aborted with DRIFT
+while the tree had not moved at all (no unstaged change, no untracked file). That is a
+property of the INSTRUMENT on that tree shape — the refresh ran NO gate before
+2026-10-29 (it pasted the gate's SOURCE into its body), so no refresh ever aborted on
+it.
+
+A refs bump must therefore ship its regenerated corpus in the same PR, or the gate trips
+on the next run.
 
 ## The daily refresh (refresh.yml)
 
