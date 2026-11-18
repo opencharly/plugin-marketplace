@@ -3,12 +3,16 @@ package marketplace
 import (
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // emit_plugins_json.go — the per-family marketplace manifests: .claude-plugin/plugin.json
 // (Claude Code) + .codex-plugin/plugin.json (Codex) + .mcp.json (MCP servers, only when the
-// family declares mcp_servers). Every field derives from the family's #MarketplaceFamily
+// family declares at least one PUBLIC server — see publicMCPServers). Every field derives from the family's #MarketplaceFamily
 // declaration — the marketplace entity is the single source for the whole generated plugins/
 // surface (a description/keyword edit regenerates the manifests).
 
@@ -83,7 +87,7 @@ func emitClaudePluginJSON(em emissions, f family) {
 		License:    pluginLicense,
 		Keywords:   f.Meta.Keywords,
 	}
-	if len(f.Meta.McpServers) > 0 {
+	if len(publicMCPServers(f)) > 0 {
 		doc.MCPServers = "./.mcp.json"
 	}
 	em["plugins/"+f.Name+"/.claude-plugin/plugin.json"] = mustJSON(doc)
@@ -109,32 +113,55 @@ func emitCodexPluginJSON(em emissions, f family) {
 			DefaultPrompt:    []string{"Use " + display + " for this OpenCharly task."},
 		},
 	}
-	if len(f.Meta.McpServers) > 0 {
+	if len(publicMCPServers(f)) > 0 {
 		doc.MCPServers = "./.mcp.json"
 	}
 	em["plugins/"+f.Name+"/.codex-plugin/plugin.json"] = mustJSON(doc)
 }
 
-// emitMCPJSON emits plugins/<family>/.mcp.json when the family declares mcp_servers (the
-// Claude Code MCP server config: {"mcpServers": {"<name>": {...}}}).
+// publicMCPServers is the ONE predicate deciding which declared mcp_servers reach the
+// generated harness config: an http server whose URL host is publicly reachable. A server on a
+// local host (localhost, *.localhost, a loopback or unspecified address) is an endpoint a charly
+// pod serves while it runs; every harness dials its static config at session start, so wiring
+// one in reports it "failed" on every host where that pod is not running
+// (opencharly/plugin-marketplace#61). The declarations stay as authored — only the emission is
+// filtered. A non-http (stdio) server is not public either, and none is declared.
+func publicMCPServers(f family) []spec.MarketplaceMCPServer {
+	var out []spec.MarketplaceMCPServer
+	for _, s := range f.Meta.McpServers {
+		if (s.Type == "" || s.Type == "http") && isPublicURL(s.Url) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// isPublicURL reports whether u parses with a host that is not local.
+func isPublicURL(u string) bool {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil && (ip.IsLoopback() || ip.IsUnspecified()) {
+		return false
+	}
+	return true
+}
+
+// emitMCPJSON emits plugins/<family>/.mcp.json when the family declares at least one public
+// server (the Claude Code MCP server config: {"mcpServers": {"<name>": {...}}}).
 func emitMCPJSON(em emissions, f family) {
-	if len(f.Meta.McpServers) == 0 {
+	public := publicMCPServers(f)
+	if len(public) == 0 {
 		return
 	}
-	servers := make(map[string]map[string]any, len(f.Meta.McpServers))
-	for _, s := range f.Meta.McpServers {
-		entry := map[string]any{}
-		if s.Type == "" || s.Type == "http" {
-			entry["type"] = "http"
-			entry["url"] = s.Url
-		} else {
-			entry["type"] = "stdio"
-			entry["command"] = s.Command
-			if len(s.Args) > 0 {
-				entry["args"] = s.Args
-			}
-		}
-		servers[s.Name] = entry
+	servers := make(map[string]map[string]any, len(public))
+	for _, s := range public {
+		servers[s.Name] = map[string]any{"type": "http", "url": s.Url}
 	}
 	em["plugins/"+f.Name+"/.mcp.json"] = mustJSON(map[string]any{"mcpServers": servers})
 }

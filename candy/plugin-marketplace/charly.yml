@@ -7,7 +7,8 @@ plugin-marketplace:
             candywalk discovery), aggregates them by marketplace family, and emits — into --out,
             the STANDALONE opencharly/marketplace repo's root (the corpus): <family>/skills/*/
             SKILL.md + references/*.md, <family>/agents/*.md, per-family .claude-plugin/plugin.json
-            + .codex-plugin/plugin.json + .mcp.json, .claude-plugin/marketplace.json (Claude Code /
+            + .codex-plugin/plugin.json + .mcp.json (public MCP servers only — a localhost server a pod
+            serves is never wired in), .claude-plugin/marketplace.json (Claude Code /
             Cursor), .agents/plugins/marketplace.json (Codex / the AGENTS framework), kimi.plugin.json
             (Kimi — the whole marketplace is one plugin), package.json (pi — the whole marketplace
             is one pi package), profiles.json. --root is NOT a second
