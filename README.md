@@ -9,7 +9,9 @@ It reads every candy's `skill:` / `hook:` / `marketplace:` kind entities (the
 candywalk discovery), aggregates them by marketplace family, and emits the
 standalone `opencharly/marketplace` repo's corpus: `<family>/skills/*/SKILL.md`
 + `references/*.md`, `<family>/agents/*.md`, the per-family
-`.claude-plugin/plugin.json` + `.codex-plugin/plugin.json` + `.mcp.json`, the
+`.claude-plugin/plugin.json` + `.codex-plugin/plugin.json` + `.mcp.json` (PUBLIC MCP servers
+only: a declared server on a local host, which a charly pod serves while it runs, is never
+wired into the static config), the
 Claude Code / Cursor `.claude-plugin/marketplace.json`, the Codex / AGENTS
 `.agents/plugins/marketplace.json`, `kimi.plugin.json` (the whole marketplace is
 one plugin), `package.json` (pi — the whole marketplace is one pi package),
