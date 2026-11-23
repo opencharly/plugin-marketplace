@@ -56,6 +56,29 @@ not restated here.
 - Regeneration on a clean tree is a NO-OP for the committed corpus (hand-authored files
   sit outside the known paths); a diff means a refs/source change is in flight.
 
+## Retirement — `retired.cue`, the one exclusion
+
+The refs list names the corpus's sources; `retired.cue` at the corpus root names the repos
+the corpus has **retired**, and a retired repo is never resolved into it — not from the refs
+list, not from a pulled tree's composition list, not transitively.
+
+```cue
+retired: [
+	"github.com/opencharly/pod-immich-ml",
+]
+```
+
+- Deleting a source's pin is NOT enough: stale subpath pins in other sources still reach old
+  trees that compose a retired repo, and the corpus would republish its skill from them
+  (measured — opencharly/plugin-marketplace#63). Retire the repo in `retired.cue` when you
+  remove its last pin.
+- The file is authored data, so it is CUE, validated against the plugin's `#Retired` (a
+  CLOSED definition): a typo'd field, a malformed list or an unqualified path fails the
+  generation. A missing file means "nothing retired" — not an error.
+- A retired repo pinned by the refs list is an authoring contradiction: the generation fails
+  and names it, rather than silently applying half the change.
+
+
 ## The drift gate (the marketplace repo's `scripts/drift-gate.sh` — ONE implementation, TWO callers)
 
 The marketplace repo's deploy workflow builds the pinned charly, regenerates the ENTIRE
