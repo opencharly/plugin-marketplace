@@ -29,8 +29,10 @@ one plugin), `package.json` (pi — the whole marketplace is one pi package),
   the corpus under `--out`, pruning generated trees by the DO-NOT-EDIT header
   first, so a deleted source entity disappears instead of lingering. `--root` is
   the repo root that holds the ONE generation input (the refs list,
-  `candy/charly-marketplace/charly.yml`); for the corpus that is the corpus
-  checkout itself, so both flags name it.
+  `candy/charly-marketplace/charly.yml`) and, optionally, the corpus's retirement
+  list `retired.cue` (repos the corpus must never publish from again — see the
+  `marketplace` skill); for the corpus that is the corpus checkout itself, so both
+  flags name it.
 - **`charly marketplace drift --root <corpus> --out <corpus>`** — the fail-closed
   no-op gate: the same pipeline in memory, compared byte-for-byte with the
   artifacts ON DISK. Git is never consulted, so drift proves "regeneration is a
