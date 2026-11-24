@@ -55,7 +55,7 @@ plugin-marketplace:
             # named here must be one this repository's generator reproduces — the gate proves
             # exactly that, and the proof is the reason a bump to a newer corpus commit lands
             # with the generator that reproduces it.
-            MARKETPLACE_REF: 6339156013596d2364767b31e14aa7f21cf99d83
+            MARKETPLACE_REF: 7eab90333ad0f9e645e6e648896455f33791e7e7
         distro:
             fedora:
                 package:
@@ -88,7 +88,7 @@ plugin-marketplace:
               id: marketplace-pinned-commit
               exit_status: 0
               stdout:
-                - contains: 6339156013596d2364767b31e14aa7f21cf99d83
+                - contains: 7eab90333ad0f9e645e6e648896455f33791e7e7
               context:
                 - build
                 - runtime
