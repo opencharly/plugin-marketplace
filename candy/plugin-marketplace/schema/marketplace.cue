@@ -38,4 +38,7 @@
 #Retired: {
 	// Fully qualified repo paths, exactly as specs address them.
 	retired: [...string]
+	// Individual skill cards, as "<family>/<name>", for a card whose thing was consolidated or
+	// removed while its owner repo lives on (opencharly/plugin-marketplace#64).
+	retired_skills?: [...string]
 }

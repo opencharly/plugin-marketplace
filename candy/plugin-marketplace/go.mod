@@ -5,7 +5,7 @@ go 1.26.8
 require (
 	cuelang.org/go v0.16.1
 	github.com/alecthomas/kong v1.15.0
-	github.com/opencharly/sdk v0.2026327.1226
+	github.com/opencharly/sdk v0.2026328.654
 	github.com/opencharly/spec v0.2026327.605
 	gopkg.in/yaml.v3 v3.0.1
 )

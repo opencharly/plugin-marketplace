@@ -134,7 +134,7 @@ func readKinds(root string) (*kindSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	scope := newCorpusScope(roots, retired)
+	scope := newCorpusScope(roots, retired.repos)
 	ents, err := candywalk.CollectEntitiesRemoteScoped(roots, refs.DownloadRepoFiles, scope.refs)
 	if err != nil {
 		return nil, fmt.Errorf("collect entities: %w", err)
@@ -171,6 +171,15 @@ func readKinds(root string) (*kindSet, error) {
 			var s spec.Skill
 			if err := e.Value.Decode(&s); err != nil {
 				return nil, fmt.Errorf("skill %q: decode: %w", e.Name, err)
+			}
+			// A retired CARD is dropped wherever it comes from (#64): the thing it describes is
+			// consolidated or gone, and no future stale edge may republish it.
+			skillName := s.Name
+			if skillName == "" {
+				skillName = e.Name
+			}
+			if retired.skillRetired(s.Family, skillName) {
+				continue
 			}
 			declared, ok := trees[s.Owner]
 			if !ok {
